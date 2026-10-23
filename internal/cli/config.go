@@ -1,0 +1,243 @@
+package cli
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/ujizin/ujibox/internal/config"
+	"github.com/ujizin/ujibox/internal/device"
+	"github.com/ujizin/ujibox/internal/paths"
+	"github.com/ujizin/ujibox/internal/ui"
+)
+
+func cmdConfig(get func() *app) *cobra.Command {
+	c := &cobra.Command{
+		Use:   "config",
+		Short: "Write, show and edit the project and global config",
+		Long: `Project files live in ` + paths.Pretty(paths.Projects()) + `, one per project, on this machine
+only. A file matches a checkout by its git remote or by path, so every
+worktree of a repo uses the same file.
+
+The global config is ` + paths.Pretty(config.GlobalPath()) + `.`,
+		GroupID: "store",
+	}
+
+	var force, print bool
+	project := &cobra.Command{
+		Use:   "project",
+		Short: "Detect the project of this checkout and write its project file",
+		Long: `Look at the checkout for Gradle application modules and Xcode projects,
+then write a project file with what uji found. Each value has a comment that
+says where it came from. Edit the file after: build commands, setup steps
+and retry rules are yours to change.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			a := get()
+			g, err := a.checkout()
+			if err != nil {
+				return err
+			}
+			ui.Info(os.Stderr, "looking at %s…", paths.Pretty(g.Root))
+			det := config.DetectVerbose(g)
+			if det == nil {
+				return errors.New("found no Gradle application module and no Xcode project; write the file by hand (see `uji help config`)")
+			}
+			text := det.Render()
+			if print {
+				fmt.Print(text)
+				return nil
+			}
+			file := filepath.Join(paths.Projects(), det.Project.Name+".toml")
+			projects, _ := config.LoadProjects()
+			for _, p := range projects {
+				if p.Matches(g) && p.File != file {
+					file = p.File
+				}
+			}
+			if _, err := os.Stat(file); err == nil && !force {
+				return fmt.Errorf("%s exists; edit it with `uji config edit`, or pass --force to replace it", paths.Pretty(file))
+			}
+			if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
+				return err
+			}
+			if _, err := config.LoadProjectFile(file); err != nil {
+				ui.Warn(os.Stderr, "the file does not load yet: %v", err)
+			}
+			ui.OK(os.Stdout, "wrote %s", paths.Pretty(file))
+			for _, k := range det.Project.AppKeys() {
+				ap := det.Project.Apps[k]
+				ui.Info(os.Stdout, "app %s: %s", ui.Bold(ap.Name()), strings.Join(ap.Platforms(), ", "))
+			}
+			fmt.Println(ui.Dim("Check the build commands, then run `uji build`. `uji config edit` opens the file."))
+			return nil
+		},
+	}
+	project.Flags().BoolVarP(&force, "force", "f", false, "replace an existing project file")
+	project.Flags().BoolVar(&print, "print", false, "print the file instead of writing it")
+
+	edit := &cobra.Command{
+		Use:   "edit [global]",
+		Short: "Open the project file of this checkout, or the global config, in $EDITOR",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			a := get()
+			file := config.GlobalPath()
+			if len(args) == 0 {
+				_, p, _, err := a.project("")
+				if p == nil {
+					return err
+				}
+				if p.File == "" {
+					return errors.New("no project file matches this checkout; run `uji config project` first")
+				}
+				file = p.File
+			} else if args[0] != "global" {
+				return fmt.Errorf("unknown target %q; use `uji config edit` or `uji config edit global`", args[0])
+			}
+			return openEditor(file)
+		},
+	}
+
+	show := &cobra.Command{
+		Use:   "show",
+		Short: "Print the project config of this checkout with the variables filled in",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			a := get()
+			g, p, _, err := a.project("")
+			if p == nil {
+				return err
+			}
+			src := paths.Pretty(p.File)
+			if p.Detected {
+				src = "detected (no project file)"
+			}
+			fmt.Printf("%s %s\n%s %s\n%s %s @ %s\n", ui.Dim("project "), p.Name, ui.Dim("source  "), src,
+				ui.Dim("checkout"), paths.Pretty(g.Root), g.Group())
+			for _, k := range p.AppKeys() {
+				ap := p.Apps[k]
+				fmt.Printf("\n%s %s\n", ui.Bold(ap.Name()), ui.Dim("["+k+"] store id "+p.StoreID(ap)))
+				for _, name := range ap.Platforms() {
+					pl := ap.Platform(name)
+					v := config.NewVars(g, ap, name)
+					fmt.Printf("  %s\n", name)
+					fmt.Printf("    id        %s\n", pl.ID)
+					for _, s := range append(append([]config.Step{}, ap.Setup...), pl.Setup...) {
+						note := ""
+						if s.Creates != "" {
+							note = ui.Dim(" (skipped when " + v.Expand(s.Creates) + " exists)")
+						}
+						fmt.Printf("    setup     %s%s\n", v.Expand(s.Run), note)
+					}
+					for _, b := range pl.Build {
+						fmt.Printf("    build     %s\n", v.Expand(b))
+					}
+					fmt.Printf("    artifact  %s\n", v.Expand(pl.Artifact))
+					for _, s := range append(append([]config.Step{}, ap.Clean...), pl.Clean...) {
+						fmt.Printf("    clean     %s\n", v.Expand(s.Run))
+					}
+					for _, r := range append(append([]config.Retry{}, ap.Retry...), pl.Retry...) {
+						fmt.Printf("    retry     /%s/ → %s\n", r.Match, v.Expand(r.Then))
+					}
+				}
+			}
+			return nil
+		},
+	}
+
+	path := &cobra.Command{
+		Use:   "path [global]",
+		Short: "Print the path of the project file of this checkout, or of the global config",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 1 && args[0] == "global" {
+				fmt.Println(config.GlobalPath())
+				return nil
+			}
+			_, p, _, err := get().project("")
+			if p == nil {
+				return err
+			}
+			if p.File == "" {
+				return errors.New("no project file matches this checkout; run `uji config project`")
+			}
+			fmt.Println(p.File)
+			return nil
+		},
+	}
+
+	alias := &cobra.Command{
+		Use:   "alias <name> <device>",
+		Short: "Give a device a short name, for example `uji config alias fold Pixel_9_Pro_Fold`",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, target := args[0], args[1]
+			switch strings.ToLower(name) {
+			case "android", "ios", "all":
+				return fmt.Errorf("%q is a platform word; pick another alias", name)
+			}
+			a := get()
+			devs, _ := a.mgr.List(a.ctx, device.AllPlatforms)
+			known := false
+			for _, d := range devs {
+				if d.ID == target || d.Name == target || d.AVD == target || d.Ref() == target {
+					known = true
+				}
+			}
+			if !known {
+				ui.Warn(os.Stderr, "no device is called %q right now; saving the alias anyway", target)
+			}
+			if err := config.SetAlias(name, target); err != nil {
+				return err
+			}
+			ui.OK(os.Stdout, "%s → %s", name, target)
+			return nil
+		},
+	}
+
+	c.AddCommand(project, edit, show, path, alias)
+	return c
+}
+
+func openEditor(file string) error {
+	if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(file, []byte(globalTemplate), 0o644); err != nil {
+			return err
+		}
+	}
+	editor := os.Getenv("VISUAL")
+	if editor == "" {
+		editor = os.Getenv("EDITOR")
+	}
+	if editor == "" {
+		editor = "vi"
+	}
+	cmd := exec.Command("/bin/sh", "-c", editor+` "$1"`, "sh", file)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return cmd.Run()
+}
+
+const globalTemplate = `# ujibox global config. Every key is optional.
+
+# retention_days = 30     # how long an unpinned build stays in the store
+# keep_last = 3           # builds of each branch and platform that never expire
+# developer_dir = "/Applications/Xcode.app/Contents/Developer"
+# android_sdk = "~/Library/Android/sdk"
+# sync_package = "io.ujibox.app"     # Android package of the ujibox app
+# sync_bundle_id = "io.ujibox.app"   # bundle id of the ujibox app on simulators
+
+# [aliases]
+# fold = "Pixel_9_Pro_Fold"
+`

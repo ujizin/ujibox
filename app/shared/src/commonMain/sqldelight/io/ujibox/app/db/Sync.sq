@@ -1,0 +1,16 @@
+-- The header of the last index.json that the app read. It has one row.
+CREATE TABLE sync (
+    id INTEGER NOT NULL PRIMARY KEY CHECK (id = 0),
+    updated_at INTEGER NOT NULL,
+    host TEXT NOT NULL,
+    platform TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO sync(id, updated_at, host, platform) VALUES (0, ?, ?, ?);
+
+clear:
+DELETE FROM sync;
+
+current:
+SELECT * FROM sync WHERE id = 0;

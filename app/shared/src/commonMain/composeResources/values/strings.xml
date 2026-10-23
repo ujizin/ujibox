@@ -1,0 +1,55 @@
+<resources>
+    <string name="app_title">ujibox</string>
+    <string name="action_back">Back</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_install">Install</string>
+    <string name="action_copy_command">Copy install command</string>
+
+    <string name="empty_title">No builds on this device</string>
+    <string name="empty_body">Connect this device to your computer and run uji sync.</string>
+    <string name="sync_folder">Sync folder: %1$s</string>
+    <string name="synced_from">Synced from %1$s, %2$s</string>
+    <string name="state_failed">Cannot read index.json: %1$s</string>
+    <string name="state_newer_schema">A newer uji wrote index.json (schema %1$d). Update the ujibox app.</string>
+    <string name="app_gone">This app is not on the device anymore.</string>
+    <string name="build_gone">This build is not on the device anymore.</string>
+
+    <string name="time_now">just now</string>
+    <string name="time_minutes">%1$dm ago</string>
+    <string name="time_hours">%1$dh ago</string>
+    <string name="time_days">%1$dd ago</string>
+
+    <string name="version">%1$s (%2$s)</string>
+    <string name="badge_pinned">pinned</string>
+    <string name="badge_dirty">dirty</string>
+    <string name="badge_installed">installed</string>
+
+    <string name="ios_warning">iOS does not let an app install other apps. Copy the install command, then paste it in a Mac terminal.</string>
+    <string name="unsupported_install">This build needs a newer ujibox app.</string>
+
+    <string name="install_done">Installed %1$s</string>
+    <string name="install_copied">Install command copied. Paste it in a Mac terminal.</string>
+    <string name="install_permission">Allow ujibox to install apps, then tap Install again.</string>
+    <string name="install_cancelled">Install cancelled</string>
+    <string name="install_missing">The build file is missing. Run uji sync again.</string>
+    <string name="install_failed">Install failed: %1$s</string>
+
+    <string name="label_app">App</string>
+    <string name="label_branch">Branch</string>
+    <string name="label_package">Package</string>
+    <string name="label_version">Version</string>
+    <string name="label_commit">Commit</string>
+    <string name="label_built">Built</string>
+    <string name="label_size">Size</string>
+    <string name="label_command">Install command</string>
+    <string name="commit_dirty">%1$s, with uncommitted changes</string>
+
+    <plurals name="branches">
+        <item quantity="one">%1$d branch</item>
+        <item quantity="other">%1$d branches</item>
+    </plurals>
+    <plurals name="builds">
+        <item quantity="one">%1$d build</item>
+        <item quantity="other">%1$d builds</item>
+    </plurals>
+</resources>

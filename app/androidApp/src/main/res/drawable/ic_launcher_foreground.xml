@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A box with a down arrow, inside the 66dp safe zone of the 108dp icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M34,48h8v20h24V48h8v28H34z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M50,30h8v16h8L54,60 42,46h8z" />
+</vector>

@@ -1,0 +1,43 @@
+-- One row per build in index.json. The order columns keep the order of the
+-- index: newest app, newest branch and newest build first.
+CREATE TABLE build (
+    id TEXT NOT NULL PRIMARY KEY,
+    app_id TEXT NOT NULL,
+    app_name TEXT NOT NULL,
+    app_order INTEGER NOT NULL,
+    branch TEXT NOT NULL,
+    detached INTEGER AS kotlin.Boolean NOT NULL,
+    branch_order INTEGER NOT NULL,
+    build_order INTEGER NOT NULL,
+    package_id TEXT NOT NULL,
+    version_name TEXT NOT NULL,
+    version_code TEXT NOT NULL,
+    sha TEXT NOT NULL,
+    dirty INTEGER AS kotlin.Boolean NOT NULL,
+    pinned INTEGER AS kotlin.Boolean NOT NULL,
+    created_at INTEGER NOT NULL,
+    size INTEGER NOT NULL,
+    install_kind TEXT NOT NULL,
+    install_file TEXT,
+    install_command TEXT
+);
+
+CREATE INDEX build_app ON build(app_id, branch_order, build_order);
+
+insert:
+INSERT INTO build VALUES ?;
+
+deleteAll:
+DELETE FROM build;
+
+apps:
+SELECT app_id, app_name, COUNT(*) AS builds, COUNT(DISTINCT branch) AS branches, MAX(created_at) AS latest
+FROM build
+GROUP BY app_id
+ORDER BY MIN(app_order);
+
+forApp:
+SELECT * FROM build WHERE app_id = ? ORDER BY branch_order, build_order;
+
+byId:
+SELECT * FROM build WHERE id = ?;

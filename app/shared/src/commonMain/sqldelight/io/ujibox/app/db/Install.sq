@@ -1,0 +1,13 @@
+-- The build that this app installed last for each package. uji does not
+-- write it, so it stays across syncs.
+CREATE TABLE install (
+    package_id TEXT NOT NULL PRIMARY KEY,
+    build_id TEXT NOT NULL,
+    installed_at INTEGER NOT NULL
+);
+
+record:
+INSERT OR REPLACE INTO install(package_id, build_id, installed_at) VALUES (?, ?, ?);
+
+all:
+SELECT * FROM install;
