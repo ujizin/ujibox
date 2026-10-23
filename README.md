@@ -1,4 +1,6 @@
-# ujibox
+<p align="center"><img src="art/logo.svg" alt="ujibox logo" width="160"></p>
+
+<h1 align="center">ujibox</h1>
 
 ujibox (`uji`) builds your Android and iOS app, keeps each build outside the
 project, and installs it on emulators, devices and simulators.
@@ -36,9 +38,10 @@ zensical serve
 
 ## The ujibox app
 
-`uji sync` copies the stored builds into the ujibox app on a device. The app
-lists them by app and branch, installs an APK on Android, and copies the
-install command on an iOS simulator. The app is a Kotlin Multiplatform
+`uji sync` copies the stored builds into the ujibox app on a device. After
+that, uji syncs again after each new build (`uji config auto-sync off` turns
+this off). The app lists the builds by app and branch, installs an APK on
+Android, and copies the install command on an iOS simulator. The app is a Kotlin Multiplatform
 project in [`app/`](app/); see [Build the ujibox app](docs/app.md).
 
 ## Development
@@ -49,3 +52,6 @@ make test
 make app-android   # the ujibox app for Android
 make app-test
 ```
+
+`art/generate_icons.py` draws the logo and writes the app icons for both
+platforms. Change the shapes or colors there, then run it again.

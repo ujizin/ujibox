@@ -38,6 +38,8 @@ data class BuildItem(
     val versionName: String,
     val versionCode: String,
     val sha: String,
+    /** The web page of the commit, or null if uji does not know the host. */
+    val commitUrl: String?,
     val dirty: Boolean,
     val pinned: Boolean,
     val createdAt: Instant?,

@@ -5,6 +5,9 @@ Run `uji help <command>` for the full help of a command.
 A `[selector]` is `android`, `ios` or a device name. See
 [Select devices](devices.md).
 
+Every command accepts `--no-sync`. It turns off [auto-sync](sync.md#auto-sync)
+for that command.
+
 ## Build and install
 
 ### `uji build [selector...]`
@@ -160,6 +163,9 @@ then builds, newest first.
 Copies the stored builds to the ujibox app on each device. See
 [Sync and the ujibox app](sync.md).
 
+uji also syncs after each change to the store, unless you turn off
+[auto-sync](sync.md#auto-sync).
+
 ### `uji config`
 
 | Subcommand | Action |
@@ -169,6 +175,7 @@ Copies the stored builds to the ujibox app on each device. See
 | `uji config show` | Print the project config with the variables filled in |
 | `uji config path [global]` | Print the path of the file |
 | `uji config alias <name> <device>` | Give a device a short name |
+| `uji config auto-sync [on\|off]` | Show, or turn on or off, [auto-sync](sync.md#auto-sync) |
 
 ### `uji doctor`
 

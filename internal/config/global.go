@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -31,7 +32,13 @@ type Global struct {
 	SyncPackage string `toml:"sync_package"`
 	// SyncBundleID is the bundle id of the ujibox app on iOS simulators.
 	SyncBundleID string `toml:"sync_bundle_id"`
+	// AutoSync syncs the ujibox app on running devices after each change to
+	// the store. Nil means on.
+	AutoSync *bool `toml:"auto_sync"`
 }
+
+// AutoSyncOn reports if uji syncs the ujibox app after a store change.
+func (g Global) AutoSyncOn() bool { return g.AutoSync == nil || *g.AutoSync }
 
 const (
 	defaultRetentionDays = 30
@@ -113,6 +120,56 @@ func SetAlias(name, target string) error {
 	}
 	return writeAtomic(path, []byte(b.String()))
 }
+
+// SetAutoSync writes auto_sync into the global config and keeps the rest of
+// the file as text.
+func SetAutoSync(on bool) error {
+	path := GlobalPath()
+	data, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if len(data) > 0 {
+		if _, err := toml.Decode(string(data), &Global{}); err != nil {
+			return fmt.Errorf("%s: %w", paths.Pretty(path), err)
+		}
+	}
+	line := fmt.Sprintf("auto_sync = %t", on)
+	lines := strings.Split(string(data), "\n")
+	// A top-level key must come before the first table.
+	end := len(lines)
+	for i, l := range lines {
+		if strings.HasPrefix(strings.TrimSpace(l), "[") {
+			end = i
+			break
+		}
+	}
+	done := false
+	for i := 0; i < end; i++ {
+		if autoSyncRe.MatchString(lines[i]) {
+			lines[i] = line
+			done = true
+		}
+	}
+	if !done {
+		head := append([]string{}, lines[:end]...)
+		for len(head) > 0 && strings.TrimSpace(head[len(head)-1]) == "" {
+			head = head[:len(head)-1]
+		}
+		head = append(head, line)
+		if end < len(lines) {
+			head = append(head, "")
+		}
+		lines = append(head, lines[end:]...)
+	}
+	text := strings.TrimRight(strings.Join(lines, "\n"), "\n") + "\n"
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return writeAtomic(path, []byte(text))
+}
+
+var autoSyncRe = regexp.MustCompile(`^\s*auto_sync\s*=`)
 
 // removeTable drops a [name] table and its keys from TOML text.
 func removeTable(text, name string) string {

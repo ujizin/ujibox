@@ -19,7 +19,9 @@ CREATE TABLE build (
     size INTEGER NOT NULL,
     install_kind TEXT NOT NULL,
     install_file TEXT,
-    install_command TEXT
+    install_command TEXT,
+    -- Added in schema 2 (migrations/1.sqm), so it is the last column.
+    commit_url TEXT
 );
 
 CREATE INDEX build_app ON build(app_id, branch_order, build_order);

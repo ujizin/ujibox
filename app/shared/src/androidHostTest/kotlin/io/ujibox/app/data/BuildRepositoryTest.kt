@@ -11,9 +11,17 @@ import kotlinx.coroutines.test.runTest
 
 class BuildRepositoryTest {
     private class FakeFolder(var index: String?) : SyncFolder {
+        var modified = 1L
+        var reads = 0
+
         override val path = "/sync/ujibox"
 
-        override fun readIndex() = index
+        override fun readIndex(): String? {
+            reads++
+            return index
+        }
+
+        override fun indexModified() = index?.let { modified }
     }
 
     private val folder = FakeFolder(null)
@@ -43,6 +51,7 @@ class BuildRepositoryTest {
                       "id": "B2", "package_id": "com.example.shop.dev",
                       "version": { "name": "1.4.0", "code": "140" },
                       "sha": "3f9a01c2aa", "dirty": true, "pinned": false,
+                      "commit_url": "https://github.com/example/shop/commit/3f9a01c2aa",
                       "created_at": "2026-10-22T14:30:12Z", "size": 84123456,
                       "manifest": "builds/B2/manifest.json",
                       "install": { "kind": "apk", "file": "builds/B2/app.apk" }
@@ -50,7 +59,7 @@ class BuildRepositoryTest {
                     {
                       "id": "B1", "package_id": "com.example.shop.dev",
                       "version": { "name": "1.4.0", "code": "139" },
-                      "sha": "77d0e4b1", "created_at": "2026-10-21T14:30:12Z", "size": 1,
+                      "sha": "77d0e4b1", "commit_url": "javascript:alert(1)", "created_at": "2026-10-21T14:30:12Z", "size": 1,
                       "install": { "kind": "apk", "file": "../outside.apk" }
                     }
                   ]
@@ -94,6 +103,8 @@ class BuildRepositoryTest {
         assertEquals(Install.Apk("builds/B2/app.apk"), b2.install)
         assertEquals(true, b2.dirty)
         assertEquals("3f9a01c2", b2.shortSha)
+        assertEquals("https://github.com/example/shop/commit/3f9a01c2aa", b2.commitUrl)
+        assertNull(shop.branches[0].builds[1].commitUrl, "only an https link is kept")
         assertEquals(Install.Unsupported, shop.branches[0].builds[1].install, "a path out of the folder is refused")
         assertIs<Install.Command>(shop.branches[1].builds[0].install)
         assertNull(shop.branches[1].builds[0].createdAt, "a bad time has no value")
@@ -137,5 +148,17 @@ class BuildRepositoryTest {
         repository.refresh()
         assertEquals(SyncState.NewerSchema(2), repository.state.value)
         assertEquals(2, repository.apps().first().size)
+    }
+
+    @Test
+    fun refreshIfChangedReadsOnlyANewIndex() = runTest {
+        folder.index = index
+        repository.refreshIfChanged()
+        assertEquals(1, folder.reads)
+        repository.refreshIfChanged()
+        assertEquals(1, folder.reads, "the same file is not read again")
+        folder.modified = 2L
+        repository.refreshIfChanged()
+        assertEquals(2, folder.reads)
     }
 }

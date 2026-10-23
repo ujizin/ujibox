@@ -24,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.ujibox.app.data.AppDetail
 import io.ujibox.app.data.Install
 import io.ujibox.app.resources.Res
@@ -38,6 +37,7 @@ import io.ujibox.app.ui.InstallMessageEffect
 import io.ujibox.app.ui.IosWarning
 import io.ujibox.app.ui.Loading
 import io.ujibox.app.ui.SyncProblem
+import io.ujibox.app.ui.WatchIndex
 import io.ujibox.app.ui.ago
 import io.ujibox.app.ui.formatSize
 import io.ujibox.app.ui.versionLabel
@@ -47,10 +47,7 @@ import org.jetbrains.compose.resources.stringResource
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BranchesScreen(model: BranchesModel, onBack: () -> Unit, onOpenBuild: (String) -> Unit) {
-    LifecycleResumeEffect(Unit) {
-        model.eventSink(BranchesEvent.Refresh)
-        onPauseOrDispose {}
-    }
+    WatchIndex(onResume = { model.eventSink(BranchesEvent.Refresh) }, onTick = { model.eventSink(BranchesEvent.CheckIndex) })
     val snackbar = remember { SnackbarHostState() }
     InstallMessageEffect(model.message, snackbar) { model.eventSink(BranchesEvent.DismissMessage) }
     Scaffold(

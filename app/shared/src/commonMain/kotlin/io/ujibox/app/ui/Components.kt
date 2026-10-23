@@ -18,11 +18,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import io.ujibox.app.data.BuildItem
 import io.ujibox.app.data.Install
 import io.ujibox.app.data.SyncState
@@ -49,6 +54,8 @@ import io.ujibox.app.resources.version
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.delay
 
 /** The icon button of a build row: install the APK, or copy the command. */
 @Composable
@@ -69,8 +76,9 @@ fun InstallIconButton(build: BuildItem, installing: Boolean, onInstall: () -> Un
 @Composable
 fun Badges(build: BuildItem) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (build.installed) Badge(stringResource(Res.string.badge_installed), MaterialTheme.colorScheme.primary)
-        if (build.pinned) Badge(stringResource(Res.string.badge_pinned), MaterialTheme.colorScheme.tertiary)
+        // Primary and error are both red, so the badges that are not a warning use other roles.
+        if (build.installed) Badge(stringResource(Res.string.badge_installed), MaterialTheme.colorScheme.tertiary)
+        if (build.pinned) Badge(stringResource(Res.string.badge_pinned), MaterialTheme.colorScheme.onSurfaceVariant)
         if (build.dirty) Badge(stringResource(Res.string.badge_dirty), MaterialTheme.colorScheme.error)
     }
 }
@@ -160,5 +168,25 @@ fun InstallMessageEffect(message: InstallMessage?, snackbar: SnackbarHostState, 
         }
         snackbar.showSnackbar(text)
         onShown()
+    }
+}
+
+/**
+ * Calls [onResume] each time the screen comes to the front, then [onTick]
+ * every 2 seconds while it stays there. uji sync can write while the app is open.
+ */
+@Composable
+fun WatchIndex(onResume: () -> Unit, onTick: () -> Unit) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val resume by rememberUpdatedState(onResume)
+    val tick by rememberUpdatedState(onTick)
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            resume()
+            while (true) {
+                delay(2.seconds)
+                tick()
+            }
+        }
     }
 }

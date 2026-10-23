@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -47,17 +48,8 @@ copies the command that installs one; run that command in a Mac terminal.`,
 					break
 				}
 			}
-			builds := map[string][]*store.Manifest{}
-			for _, p := range devicePlatforms(devs) {
-				builds[p] = a.store.List(store.Filter{AppID: appID, Platform: p})
-			}
-			for _, p := range devicePlatforms(devs) {
-				for _, m := range builds[p] {
-					if l := a.store.Use(m); l != nil {
-						defer l.Unlock()
-					}
-				}
-			}
+			builds, unlock := a.syncBuilds(devicePlatforms(devs), appID)
+			defer unlock()
 			return forEach(devs, func(d device.Device) (string, error) {
 				r, err := syncer.Sync(a.ctx, a.mgr, a.global, d, builds[d.Platform])
 				if err != nil {
@@ -70,4 +62,56 @@ copies the command that installs one; run that command in a Mac terminal.`,
 	pf.add(c)
 	c.Flags().StringVarP(&appID, "app", "A", "", "sync only this store app id (see `uji builds --all`)")
 	return c
+}
+
+// syncBuilds lists the stored builds of each platform and holds them, so
+// prune cannot remove one during the copy. Call unlock after the sync.
+func (a *app) syncBuilds(platforms []string, appID string) (map[string][]*store.Manifest, func()) {
+	builds := map[string][]*store.Manifest{}
+	var locks []interface{ Unlock() }
+	for _, p := range platforms {
+		builds[p] = a.store.List(store.Filter{AppID: appID, Platform: p})
+		for _, m := range builds[p] {
+			if l := a.store.Use(m); l != nil {
+				locks = append(locks, l)
+			}
+		}
+	}
+	return builds, func() {
+		for _, l := range locks {
+			l.Unlock()
+		}
+	}
+}
+
+// autoSync syncs the ujibox app on each running device of the platforms,
+// after a command changed the store. It never fails the command: it skips a
+// device without the ujibox app, and it prints other problems as warnings.
+func (a *app) autoSync(platforms ...string) {
+	if a.noSync || !a.global.AutoSyncOn() || a.ctx.Err() != nil || len(platforms) == 0 {
+		return
+	}
+	devs, _ := a.mgr.List(a.ctx, platforms)
+	var ready []device.Device
+	for _, d := range devs {
+		if d.Ready() {
+			ready = append(ready, d)
+		}
+	}
+	if len(ready) == 0 {
+		return
+	}
+	builds, unlock := a.syncBuilds(devicePlatforms(ready), "")
+	defer unlock()
+	for _, d := range ready {
+		r, err := syncer.Sync(a.ctx, a.mgr, a.global, d, builds[d.Platform])
+		switch {
+		case errors.Is(err, syncer.ErrNoApp):
+			continue
+		case err != nil:
+			ui.Warn(os.Stderr, "auto-sync %s: %v", d.Label(), err)
+		case r.Pushed > 0 || r.Removed > 0:
+			ui.Info(os.Stderr, "auto-sync %s: %s (%d copied, %d removed)", d.Label(), ui.Plural(r.Pushed+r.Kept, "build"), r.Pushed, r.Removed)
+		}
+	}
 }

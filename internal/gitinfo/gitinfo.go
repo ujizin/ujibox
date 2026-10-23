@@ -94,6 +94,30 @@ func NormalizeRemote(url string) string {
 	return strings.ToLower(u)
 }
 
+// CommitURL returns the web page of a commit for a remote from
+// NormalizeRemote, or "" when the host has no known commit page.
+func CommitURL(remote, sha string) string {
+	if remote == "" || sha == "" {
+		return ""
+	}
+	host, path, ok := strings.Cut(remote, "/")
+	if !ok || path == "" {
+		return ""
+	}
+	// An ssh port is not the port of the web page.
+	host, _, _ = strings.Cut(host, ":")
+	switch {
+	case strings.Contains(host, "dev.azure.com"), strings.Contains(host, "visualstudio.com"):
+		return ""
+	case strings.Contains(host, "gitlab"):
+		return "https://" + host + "/" + path + "/-/commit/" + sha
+	case strings.Contains(host, "bitbucket"):
+		return "https://" + host + "/" + path + "/commits/" + sha
+	}
+	// GitHub, Gitea, Forgejo and Codeberg use /commit/.
+	return "https://" + host + "/" + path + "/commit/" + sha
+}
+
 func git(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir

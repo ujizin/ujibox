@@ -24,6 +24,9 @@ data class AppsModel(
 
 sealed interface AppsEvent {
     data object Refresh : AppsEvent
+
+    /** Reads the index only if it changed. */
+    data object CheckIndex : AppsEvent
 }
 
 @Inject
@@ -37,6 +40,7 @@ class AppsPresenter(private val repository: BuildRepository) : Presenter<AppsMod
         return AppsModel(apps, sync, state, repository.folderPath) { event ->
             when (event) {
                 AppsEvent.Refresh -> scope.launch { repository.refresh() }
+                AppsEvent.CheckIndex -> scope.launch { repository.refreshIfChanged() }
             }
         }
     }

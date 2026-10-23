@@ -19,7 +19,8 @@ Compose Multiplatform UI for Android and iOS.
     uji install ios "iPhone 17 Pro"
     ```
 
-3. Copy the stored builds into the app.
+3. Copy the stored builds into the app. You must do this only one time.
+   After that, [auto-sync](sync.md#auto-sync) copies each new build.
 
     ```sh
     uji sync
@@ -28,8 +29,8 @@ Compose Multiplatform UI for Android and iOS.
 If Gradle cannot find the Android SDK, set `ANDROID_HOME`, or write
 `sdk.dir` in `app/local.properties`.
 
-The app reads `index.json` again each time it comes to the front. Use the
-refresh button after a sync while the app is open.
+The app reads `index.json` again each time it comes to the front. While the
+app is open, it checks the file every 2 seconds.
 
 ## Install a build from the app
 
@@ -41,6 +42,10 @@ refresh button after a sync while the app is open.
 
 The app marks the build that it installed last for each package as
 `installed`.
+
+On the screen of a build, the commit is a link to its web page, if the
+checkout has a known remote. The copy button next to it copies that link,
+or the commit sha if there is no link.
 
 ## Project layout
 
@@ -63,6 +68,7 @@ The shared code uses these libraries:
 ### Data flow
 
 1. `BuildRepository.refresh()` reads `index.json` from the sync folder.
+   `refreshIfChanged()` reads it only if its modification time changed.
 2. The repository replaces the rows of the `build` table in one transaction.
 3. Each presenter collects a flow of the database and returns a model.
 4. The screen draws the model and sends events back through `eventSink`.

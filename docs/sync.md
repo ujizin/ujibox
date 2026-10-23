@@ -22,6 +22,39 @@ uji sync android       # Android devices only
 uji sync "Galaxy S24"  # one device
 ```
 
+## Auto-sync
+
+Auto-sync is on by default. After a command adds or removes a stored build,
+uji syncs the ujibox app on each running device of that platform. These
+commands start an auto-sync:
+
+- `uji build` and `uji install`, after a new build.
+- `uji builds rm`, `uji builds pin` and `uji builds unpin`.
+- `uji builds prune`, if it removed a build.
+
+uji skips a device that does not have the ujibox app. Auto-sync never makes
+a command fail: if a sync fails, uji shows a warning. uji does not boot a
+device for an auto-sync.
+
+To turn off auto-sync for one command, add `--no-sync`:
+
+```sh
+uji install --no-sync
+```
+
+To turn it off for all commands:
+
+```sh
+uji config auto-sync off
+```
+
+This writes `auto_sync = false` in the global config. Run
+`uji config auto-sync on` to turn it on again, and `uji config auto-sync`
+to see the current state.
+
+While the ujibox app is open, it checks `index.json` every 2 seconds. A new
+sync then shows in the app without a refresh.
+
 ## What sync copies
 
 - **To an Android device:** every stored Android build, as APKs.
@@ -91,6 +124,7 @@ row needs.
               "package_id": "com.example.shop.dev",
               "version": { "name": "1.4.0", "code": "140" },
               "sha": "3f9a01c2…",
+              "commit_url": "https://github.com/example/shop/commit/3f9a01c2…",
               "dirty": false,
               "pinned": false,
               "created_at": "2026-10-22T14:30:12Z",
@@ -111,6 +145,9 @@ row needs.
 
 - Apps, branches and builds are in order, newest first.
 - All paths are relative to the `ujibox` directory.
+- `commit_url` is the web page of the commit. uji makes it from the `origin`
+  remote for GitHub, GitLab, Bitbucket and hosts with the same URL form. It
+  is missing if the checkout has no remote, or if the host is Azure DevOps.
 - On a detached HEAD, the branch `name` is `@<worktree>` and `detached` is
   true.
 

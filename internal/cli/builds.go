@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -60,6 +61,7 @@ builds of each branch and every pinned build stay.`,
 					state = "pinned"
 				}
 				ui.OK(os.Stdout, "%s build %s (%s %s %s)", state, m.ShortID(), m.App.Name, m.Platform, m.Group())
+				a.autoSync(m.Platform)
 				return nil
 			},
 		}
@@ -82,6 +84,7 @@ builds of each branch and every pinned build stay.`,
 				return err
 			}
 			ui.OK(os.Stdout, "removed build %s (%s %s %s)", m.ShortID(), m.App.Name, m.Platform, m.Group())
+			a.autoSync(m.Platform)
 			return nil
 		},
 	}
@@ -125,6 +128,18 @@ builds of each branch and every pinned build stay.`,
 				ui.Warn(os.Stderr, "%v", e)
 			}
 			ui.OK(os.Stdout, "%s %s, %s", verb, ui.Plural(len(removed), "build"), ui.Size(freed))
+			if !dryRun {
+				platforms := map[string]bool{}
+				for _, m := range removed {
+					platforms[m.Platform] = true
+				}
+				var list []string
+				for p := range platforms {
+					list = append(list, p)
+				}
+				sort.Strings(list)
+				a.autoSync(list...)
+			}
 			return nil
 		},
 	}

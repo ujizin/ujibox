@@ -32,6 +32,8 @@ data class BranchesModel(
 sealed interface BranchesEvent {
     data object Refresh : BranchesEvent
 
+    data object CheckIndex : BranchesEvent
+
     data class Install(val build: BuildItem) : BranchesEvent
 
     data object DismissMessage : BranchesEvent
@@ -59,6 +61,7 @@ class BranchesPresenter(
         ) { event ->
             when (event) {
                 BranchesEvent.Refresh -> scope.launch { repository.refresh() }
+                BranchesEvent.CheckIndex -> scope.launch { repository.refreshIfChanged() }
                 is BranchesEvent.Install -> runner.install(event.build)
                 BranchesEvent.DismissMessage -> runner.dismiss()
             }

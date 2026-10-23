@@ -1,0 +1,2 @@
+-- Schema 1 to 2: the web page of the commit.
+ALTER TABLE build ADD COLUMN commit_url TEXT;

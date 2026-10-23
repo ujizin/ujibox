@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -66,10 +67,13 @@ only that platform; a device name builds the platform of that device.`,
 				return err
 			}
 			announce(g, p, ap)
+			var built []string
+			defer func() { a.autoSync(built...) }()
 			for _, pl := range platforms {
 				if _, err := a.build(g, p, ap, pl, bf); err != nil {
 					return err
 				}
+				built = append(built, pl)
 			}
 			a.store.MaybePrune(a.policy())
 			return nil
@@ -240,6 +244,12 @@ every running device and never boots one.`,
 			})
 			if ref == "" {
 				a.store.MaybePrune(a.policy())
+				var built []string
+				for pl := range builds {
+					built = append(built, pl)
+				}
+				sort.Strings(built)
+				a.autoSync(built...)
 			}
 			return err
 		},

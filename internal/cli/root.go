@@ -31,6 +31,8 @@ type app struct {
 	global config.Global
 	mgr    *device.Manager
 	store  *store.Store
+	// noSync turns auto-sync off for this run (--no-sync).
+	noSync bool
 }
 
 func newApp(ctx context.Context) *app {
@@ -106,9 +108,11 @@ func (e *quietError) Error() string { return e.msg }
 
 func newRoot(ctx context.Context) *cobra.Command {
 	var a *app
+	var noSync bool
 	get := func() *app {
 		if a == nil {
 			a = newApp(ctx)
+			a.noSync = noSync
 		}
 		return a
 	}
@@ -132,6 +136,7 @@ With no selector, a command acts on every running device and booted simulator.`,
 			return get().openTUI()
 		},
 	}
+	root.PersistentFlags().BoolVar(&noSync, "no-sync", false, "do not sync the ujibox app on running devices after a store change")
 	root.CompletionOptions.HiddenDefaultCmd = false
 	root.AddGroup(
 		&cobra.Group{ID: "build", Title: "Build and install:"},

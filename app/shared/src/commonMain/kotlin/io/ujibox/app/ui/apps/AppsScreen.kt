@@ -19,7 +19,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.ujibox.app.data.AppSummary
 import io.ujibox.app.data.SyncState
 import io.ujibox.app.resources.Res
@@ -35,6 +34,7 @@ import io.ujibox.app.resources.synced_from
 import io.ujibox.app.ui.CenteredMessage
 import io.ujibox.app.ui.Loading
 import io.ujibox.app.ui.SyncProblem
+import io.ujibox.app.ui.WatchIndex
 import io.ujibox.app.ui.ago
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.pluralStringResource
@@ -43,11 +43,7 @@ import org.jetbrains.compose.resources.stringResource
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppsScreen(model: AppsModel, onOpenApp: (String) -> Unit) {
-    // uji sync writes while the app is in the background; read the index on each return.
-    LifecycleResumeEffect(Unit) {
-        model.eventSink(AppsEvent.Refresh)
-        onPauseOrDispose {}
-    }
+    WatchIndex(onResume = { model.eventSink(AppsEvent.Refresh) }, onTick = { model.eventSink(AppsEvent.CheckIndex) })
     Scaffold(
         topBar = {
             TopAppBar(

@@ -29,4 +29,9 @@ internal class AndroidSyncFolder(context: Context) : io.ujibox.app.data.SyncFold
         val file = File(dir, "index.json")
         return if (file.isFile) file.readText() else null
     }
+
+    override fun indexModified(): Long? {
+        val file = File(dir, "index.json")
+        return if (file.isFile) file.lastModified() else null
+    }
 }

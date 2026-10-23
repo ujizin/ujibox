@@ -36,6 +36,7 @@ data class IndexBuild(
     @SerialName("package_id") val packageId: String = "",
     val version: IndexVersion = IndexVersion(),
     val sha: String = "",
+    @SerialName("commit_url") val commitUrl: String? = null,
     val dirty: Boolean = false,
     val pinned: Boolean = false,
     @SerialName("created_at") val createdAt: String = "",

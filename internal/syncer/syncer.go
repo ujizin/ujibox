@@ -13,6 +13,7 @@ package syncer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/ujizin/ujibox/internal/config"
 	"github.com/ujizin/ujibox/internal/device"
+	"github.com/ujizin/ujibox/internal/gitinfo"
 	"github.com/ujizin/ujibox/internal/proc"
 	"github.com/ujizin/ujibox/internal/store"
 )
@@ -60,6 +62,7 @@ type Build struct {
 	PackageID string        `json:"package_id"`
 	Version   store.Version `json:"version"`
 	SHA       string        `json:"sha"`
+	CommitURL string        `json:"commit_url,omitempty"` // the web page of the commit, if the host is known
 	Dirty     bool          `json:"dirty"`
 	Pinned    bool          `json:"pinned"`
 	CreatedAt time.Time     `json:"created_at"`
@@ -78,6 +81,9 @@ type Install struct {
 	File    string `json:"file,omitempty"`
 	Command string `json:"command,omitempty"`
 }
+
+// ErrNoApp means the ujibox app is not installed on the device.
+var ErrNoApp = errors.New("the ujibox app is not installed")
 
 // Result of one device sync.
 type Result struct {
@@ -102,13 +108,13 @@ func Sync(ctx context.Context, mgr *device.Manager, g config.Global, d device.De
 	case config.Android:
 		out, err := mgr.Shell(ctx, d, "pm path "+proc.ShellQuote(g.SyncPackage))
 		if err != nil || !strings.HasPrefix(strings.TrimSpace(out), "package:") {
-			return Result{}, fmt.Errorf("the ujibox app (%s) is not installed on %s", g.SyncPackage, d.Label())
+			return Result{}, fmt.Errorf("%w on %s (%s)", ErrNoApp, d.Label(), g.SyncPackage)
 		}
 		t = &androidTarget{mgr: mgr, dev: d, root: "/sdcard/Android/data/" + g.SyncPackage + "/files/ujibox"}
 	case config.IOS:
 		dir, err := mgr.AppContainer(ctx, d, g.SyncBundleID)
 		if err != nil || dir == "" {
-			return Result{}, fmt.Errorf("the ujibox app (%s) is not installed on %s", g.SyncBundleID, d.Label())
+			return Result{}, fmt.Errorf("%w on %s (%s)", ErrNoApp, d.Label(), g.SyncBundleID)
 		}
 		t = &simTarget{dev: d, root: filepath.Join(dir, "Documents", "ujibox")}
 	default:
@@ -180,7 +186,8 @@ func BuildIndex(builds []*store.Manifest, platform, host string, install func(*s
 			idx.Apps[ai].Branches = append(idx.Apps[ai].Branches, Branch{Name: m.Group(), Detached: m.Git.Detached})
 		}
 		idx.Apps[ai].Branches[bi].Builds = append(idx.Apps[ai].Branches[bi].Builds, Build{
-			ID: m.ID, PackageID: m.PackageID, Version: m.Version, SHA: m.Git.SHA, Dirty: m.Git.Dirty,
+			ID: m.ID, PackageID: m.PackageID, Version: m.Version, SHA: m.Git.SHA,
+			CommitURL: gitinfo.CommitURL(m.Git.Remote, m.Git.SHA), Dirty: m.Git.Dirty,
 			Pinned: m.Pinned, CreatedAt: m.CreatedAt, Size: m.Artifact.Size,
 			Manifest: path.Join("builds", m.ID, "manifest.json"),
 			Install:  install(m),

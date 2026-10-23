@@ -43,6 +43,10 @@
     <string name="label_size">Size</string>
     <string name="label_command">Install command</string>
     <string name="commit_dirty">%1$s, with uncommitted changes</string>
+    <string name="action_copy_commit_link">Copy commit link</string>
+    <string name="action_copy_commit">Copy commit</string>
+    <string name="commit_link_copied">Commit link copied</string>
+    <string name="commit_copied">Commit copied</string>
 
     <plurals name="branches">
         <item quantity="one">%1$d branch</item>

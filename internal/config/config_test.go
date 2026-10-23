@@ -107,3 +107,33 @@ func TestLoadRejectsUnknownKeys(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestSetAutoSync(t *testing.T) {
+	t.Setenv("UJIBOX_CONFIG", t.TempDir())
+	g, _ := LoadGlobal()
+	if !g.AutoSyncOn() {
+		t.Fatal("auto-sync must be on by default")
+	}
+	write(t, GlobalPath(), "# my config\nkeep_last = 5\n\n[aliases]\nfold = \"Pixel\"\n")
+	if err := SetAutoSync(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetAutoSync(false); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(GlobalPath())
+	want := "# my config\nkeep_last = 5\nauto_sync = false\n\n[aliases]\nfold = \"Pixel\"\n"
+	if string(data) != want {
+		t.Fatalf("file:\n%s\nwant:\n%s", data, want)
+	}
+	g, err := LoadGlobal()
+	if err != nil || g.AutoSyncOn() || g.KeepLast != 5 || g.Aliases["fold"] != "Pixel" {
+		t.Fatalf("loaded %+v, %v", g, err)
+	}
+	if err := SetAutoSync(true); err != nil {
+		t.Fatal(err)
+	}
+	if g, _ := LoadGlobal(); !g.AutoSyncOn() {
+		t.Fatal("auto-sync must be on again")
+	}
+}

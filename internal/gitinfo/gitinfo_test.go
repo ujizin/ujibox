@@ -16,3 +16,20 @@ func TestNormalizeRemote(t *testing.T) {
 		}
 	}
 }
+
+func TestCommitURL(t *testing.T) {
+	cases := map[string]string{
+		"github.com/org/repo":         "https://github.com/org/repo/commit/abc",
+		"gitlab.example.com/g/sub/r":  "https://gitlab.example.com/g/sub/r/-/commit/abc",
+		"bitbucket.org/team/repo":     "https://bitbucket.org/team/repo/commits/abc",
+		"git.example.com:2222/org/r":  "https://git.example.com/org/r/commit/abc",
+		"dev.azure.com/org/proj/_git": "",
+		"":                            "",
+		"github.com":                  "",
+	}
+	for remote, want := range cases {
+		if got := CommitURL(remote, "abc"); got != want {
+			t.Errorf("CommitURL(%q) = %q, want %q", remote, got, want)
+		}
+	}
+}

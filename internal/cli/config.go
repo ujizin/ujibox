@@ -204,7 +204,47 @@ and retry rules are yours to change.`,
 		},
 	}
 
-	c.AddCommand(project, edit, show, path, alias)
+	autoSync := &cobra.Command{
+		Use:   "auto-sync [on|off]",
+		Short: "Show, or turn on or off, the sync of the ujibox app after each store change",
+		Long: `After a command adds or removes a stored build, uji syncs the ujibox app on
+each running device that has it installed. Auto-sync is on by default.
+
+With no argument, uji prints the current state. --no-sync turns it off for
+one command.`,
+		Args:      cobra.MaximumNArgs(1),
+		ValidArgs: []string{"on", "off"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			a := get()
+			if len(args) == 0 {
+				state := "off"
+				if a.global.AutoSyncOn() {
+					state = "on"
+				}
+				fmt.Println(state)
+				return nil
+			}
+			var on bool
+			switch strings.ToLower(args[0]) {
+			case "on", "true", "yes":
+				on = true
+			case "off", "false", "no":
+			default:
+				return fmt.Errorf("%q is not on or off", args[0])
+			}
+			if err := config.SetAutoSync(on); err != nil {
+				return err
+			}
+			state := "off"
+			if on {
+				state = "on"
+			}
+			ui.OK(os.Stdout, "auto-sync %s", state)
+			return nil
+		},
+	}
+
+	c.AddCommand(project, edit, show, path, alias, autoSync)
 	return c
 }
 
@@ -237,6 +277,7 @@ const globalTemplate = `# ujibox global config. Every key is optional.
 # android_sdk = "~/Library/Android/sdk"
 # sync_package = "io.ujibox.app"     # Android package of the ujibox app
 # sync_bundle_id = "io.ujibox.app"   # bundle id of the ujibox app on simulators
+# auto_sync = true        # sync the ujibox app on running devices after each store change
 
 # [aliases]
 # fold = "Pixel_9_Pro_Fold"

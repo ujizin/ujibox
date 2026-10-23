@@ -39,6 +39,9 @@ class BuildRepository(
     private val lock = Mutex()
     private val _state = MutableStateFlow<SyncState>(SyncState.Loading)
 
+    /** The modification time of the index that [refresh] read last. */
+    private var readStamp: Long? = null
+
     val state: StateFlow<SyncState> = _state.asStateFlow()
 
     val folderPath: String get() = folder.path
@@ -94,6 +97,12 @@ class BuildRepository(
         }
     }
 
+    /** Reads index.json again only if the file changed after the last read. */
+    suspend fun refreshIfChanged() {
+        val stamp = withContext(io) { runCatching { folder.indexModified() }.getOrNull() }
+        if (stamp != readStamp || _state.value is SyncState.Loading) refresh()
+    }
+
     suspend fun recordInstall(build: BuildItem) {
         withContext(io) {
             db.installQueries.record(build.packageId, build.id, Clock.System.now().toEpochMilliseconds())
@@ -101,6 +110,8 @@ class BuildRepository(
     }
 
     private fun load(): SyncState {
+        // Take the time before the read: a write during the read then causes one more read.
+        readStamp = runCatching { folder.indexModified() }.getOrNull()
         val text = try {
             folder.readIndex()
         } catch (e: Exception) {
@@ -146,6 +157,7 @@ class BuildRepository(
                                 install_kind = b.install.kind,
                                 install_file = b.install.file,
                                 install_command = b.install.command,
+                                commit_url = b.commitUrl?.takeIf { it.startsWith("https://") },
                             ),
                         )
                     }
@@ -168,6 +180,7 @@ class BuildRepository(
         versionName = version_name,
         versionCode = version_code,
         sha = sha,
+        commitUrl = commit_url,
         dirty = dirty,
         pinned = pinned,
         createdAt = parseInstant(created_at),

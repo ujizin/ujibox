@@ -12,7 +12,10 @@ import io.ujibox.app.install.InstallResult
 import io.ujibox.app.install.Installer
 import io.ujibox.app.ui.App
 import kotlinx.cinterop.ExperimentalForeignApi
+import platform.Foundation.NSDate
 import platform.Foundation.NSDocumentDirectory
+import platform.Foundation.NSFileModificationDate
+import platform.Foundation.timeIntervalSince1970
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSString
 import platform.Foundation.NSURL
@@ -49,6 +52,13 @@ private class IosSyncFolder : SyncFolder {
         if (!NSFileManager.defaultManager.fileExistsAtPath(file)) return null
         return NSString.stringWithContentsOfFile(file, NSUTF8StringEncoding, null)
             ?: throw IllegalStateException("cannot read $file")
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    override fun indexModified(): Long? {
+        val attributes = NSFileManager.defaultManager.attributesOfItemAtPath("$path/index.json", null) ?: return null
+        val date = attributes[NSFileModificationDate] as? NSDate ?: return null
+        return (date.timeIntervalSince1970 * 1000).toLong()
     }
 }
 
