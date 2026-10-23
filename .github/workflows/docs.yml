@@ -19,8 +19,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
-      - run: pip install zensical
-      - run: zensical build --clean
+      - run: scripts/docs.sh build
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site

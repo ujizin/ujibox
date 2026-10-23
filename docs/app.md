@@ -1,7 +1,8 @@
-# Build the ujibox app
+# The ujibox app
 
-The ujibox app is in `app/`. It is a Kotlin Multiplatform project with a
-Compose Multiplatform UI for Android and iOS.
+The ujibox app runs on Android devices, Android emulators and iOS
+simulators. It lists the builds that `uji sync` copies to the device, by app
+and branch, and installs them. Its source is in `app/`.
 
 ## Install it on a device
 
@@ -46,48 +47,3 @@ The app marks the build that it installed last for each package as
 On the screen of a build, the commit is a link to its web page, if the
 checkout has a known remote. The copy button next to it copies that link,
 or the commit sha if there is no link.
-
-## Project layout
-
-| Path | Contents |
-|---|---|
-| `app/shared` | The shared code: data, presenters and UI |
-| `app/androidApp` | The Android application |
-| `app/iosApp` | The iOS host app; `project.yml` is the xcodegen spec |
-
-The shared code uses these libraries:
-
-| Library | Use |
-|---|---|
-| [Metro](https://github.com/ZacSweers/metro) | Dependency injection. `AppGraph` is the graph |
-| [SQLDelight](https://github.com/sqldelight/sqldelight) | The database that holds the imported index |
-| [Molecule](https://github.com/cashapp/molecule) | Runs the presenters. A presenter is a composable function that returns the model of a screen |
-| Navigation 3 | The back stack: apps, then the builds of an app, then one build |
-| Coroutines and Flow | The screens observe the database through flows |
-
-### Data flow
-
-1. `BuildRepository.refresh()` reads `index.json` from the sync folder.
-   `refreshIfChanged()` reads it only if its modification time changed.
-2. The repository replaces the rows of the `build` table in one transaction.
-3. Each presenter collects a flow of the database and returns a model.
-4. The screen draws the model and sends events back through `eventSink`.
-
-If `index.json` does not parse, the app keeps the last builds and shows the
-error. If the index has a newer schema, the app tells you to update it.
-
-## Tests
-
-```sh
-cd app
-./gradlew :shared:testAndroidHostTest
-```
-
-## Change the iOS project
-
-Edit `app/iosApp/project.yml`, then generate the Xcode project again:
-
-```sh
-cd app/iosApp
-xcodegen generate
-```

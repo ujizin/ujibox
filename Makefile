@@ -14,10 +14,10 @@ test:
 	go test ./...
 
 docs:
-	zensical build --clean
+	scripts/docs.sh build
 
 docs-serve:
-	zensical serve
+	scripts/docs.sh
 
 # The ujibox app (app/). The Android tasks need ANDROID_HOME or app/local.properties.
 app-android:

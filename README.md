@@ -2,19 +2,38 @@
 
 <h1 align="center">ujibox</h1>
 
-ujibox (`uji`) builds your Android and iOS app, keeps each build outside the
-project, and installs it on emulators, devices and simulators.
+ujibox (`uji`) is a CLI that helps you build and debug Android and iOS
+apps. It builds your app, keeps each build, and puts it on emulators,
+simulators and devices in one step.
 
 ```sh
 uji install            # build, store and install on every running device
-uji install -L         # install the last stored build of this branch again
+uji install -L         # install the last build of this branch again
 uji deeplink "shop://cart"
-uji record ~/Movies    # Ctrl-C stops; the file name has the branch and the time
-uji builds             # the stored builds, by app and branch
+uji record ~/Movies    # Ctrl-C stops; the file goes in ~/Movies/<branch>/
 uji                    # the interactive screen
 ```
 
-ujibox does not show logs and does not inspect network traffic.
+## Features
+
+- Interactive screen: run `uji`
+- Build, with the setup steps of your project
+- Build store by app and branch, kept for 30 days
+- Install on many devices at once, or reinstall a stored build
+- Deeplinks, screenshots and screen recording
+- Boot and shut down emulators and simulators
+- The ujibox app: your builds on the device, synced after each build
+
+## Platforms
+
+| Target | Build | Install | Deeplink | Screenshot | Record |
+|---|---|---|---|---|---|
+| Android emulator | yes | yes | yes | yes | yes |
+| Android device | yes | yes | yes | yes | yes |
+| iOS simulator | yes | yes | yes | yes | yes |
+| iOS device | no | no | no | no | no |
+
+The host is macOS. Physical iOS devices are not supported.
 
 ## Install
 
@@ -23,35 +42,33 @@ go install github.com/ujizin/ujibox/cmd/uji@latest
 uji doctor
 ```
 
-The host is macOS. Android needs the Android SDK; iOS needs Xcode; Android
-recording needs [scrcpy](https://github.com/Genymobile/scrcpy).
+- Android needs the Android SDK.
+- iOS needs Xcode.
+- Android screen recording needs [scrcpy](https://github.com/Genymobile/scrcpy).
 
 ## Documentation
 
-The documentation is in [`docs/`](docs/) and is built with
-[Zensical](https://zensical.org):
+Read the guides in [`docs/`](docs/): [get started](docs/getting-started.md),
+[commands](docs/commands.md) and [the ujibox app](docs/app.md).
 
-```sh
-pip install zensical
-zensical serve
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
 ```
+Copyright 2026 ujizin (Lucas Yuji)
 
-## The ujibox app
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-`uji sync` copies the stored builds into the ujibox app on a device. After
-that, uji syncs again after each new build (`uji config auto-sync off` turns
-this off). The app lists the builds by app and branch, installs an APK on
-Android, and copies the install command on an iOS simulator. The app is a Kotlin Multiplatform
-project in [`app/`](app/); see [Build the ujibox app](docs/app.md).
+   http://www.apache.org/licenses/LICENSE-2.0
 
-## Development
-
-```sh
-make build   # bin/uji
-make test
-make app-android   # the ujibox app for Android
-make app-test
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 ```
-
-`art/generate_icons.py` draws the logo and writes the app icons for both
-platforms. Change the shapes or colors there, then run it again.

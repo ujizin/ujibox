@@ -1,7 +1,10 @@
+<p align="center"><img src="assets/logo.svg" alt="ujibox logo" width="160"></p>
+
 # ujibox
 
-ujibox (`uji`) builds your Android and iOS app, keeps each build outside the
-project, and installs it on emulators, devices and simulators.
+ujibox (`uji`) is a CLI that helps you build and debug Android and iOS
+apps. It builds your app, keeps each build, and puts it on emulators,
+simulators and devices in one step.
 
 ```console
 $ uji install
@@ -20,12 +23,10 @@ $ uji install
 - Installs a build on many devices in parallel, and reports each device.
 - Installs a stored build again without a rebuild: `uji install --last`.
 - Opens deeplinks, takes screenshots and records the screen.
-- Copies the stored builds to the ujibox app on a device: `uji sync`.
-
-## What ujibox does not do
-
-ujibox does not show logs and does not inspect network traffic. Use a
-dedicated tool for those.
+- Lists, boots and shuts down emulators and simulators.
+- Copies the stored builds to the ujibox app on a device: `uji sync`. After
+  each new build, uji syncs again by itself.
+- Opens an interactive screen: run `uji` with no command.
 
 ## Platforms
 
@@ -36,7 +37,7 @@ dedicated tool for those.
 | iOS simulator | yes | yes | yes | yes | yes (simctl) |
 | iOS device | no | no | no | no | no |
 
-The host is macOS.
+The host is macOS. Physical iOS devices are not supported.
 
 ## Next steps
 

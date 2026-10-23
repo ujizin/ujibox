@@ -85,7 +85,7 @@ ujibox/builds/<build-id>/manifest.json
 ujibox/builds/<build-id>/<name>.apk      (or <name>.app)
 ```
 
-Install the ujibox app before the sync; see [Build the ujibox app](app.md).
+Install the ujibox app before the sync; see [The ujibox app](app.md).
 Set its package and bundle id with `sync_package` and `sync_bundle_id` in the
 global config.
 

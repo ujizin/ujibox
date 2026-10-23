@@ -2,3 +2,4 @@
 /site/
 /dist/
 .DS_Store
+/.venv-docs/
