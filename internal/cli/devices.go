@@ -17,8 +17,8 @@ import (
 type platformFlags struct{ android, ios bool }
 
 func (p *platformFlags) add(c *cobra.Command) {
-	c.Flags().BoolVar(&p.android, "android", false, "only Android devices")
-	c.Flags().BoolVar(&p.ios, "ios", false, "only iOS simulators")
+	c.Flags().BoolVarP(&p.android, "android", "A", false, "only Android devices")
+	c.Flags().BoolVarP(&p.ios, "ios", "I", false, "only iOS simulators")
 }
 
 func cmdDevices(get func() *app) *cobra.Command {

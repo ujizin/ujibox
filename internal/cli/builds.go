@@ -169,7 +169,7 @@ type scopeFlags struct {
 }
 
 func (s *scopeFlags) add(c *cobra.Command) {
-	c.Flags().StringVarP(&s.app, "app", "A", "", "app of the project")
+	c.Flags().StringVar(&s.app, "app", "", "app of the project")
 	c.Flags().StringVarP(&s.platform, "platform", "p", "", "android or ios")
 }
 

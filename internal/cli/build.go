@@ -28,7 +28,7 @@ type buildFlags struct {
 }
 
 func (b *buildFlags) add(c *cobra.Command) {
-	c.Flags().StringVarP(&b.app, "app", "A", "", "app of the project to build, when it has more than one")
+	c.Flags().StringVar(&b.app, "app", "", "app of the project to build, when it has more than one")
 	c.Flags().BoolVarP(&b.clean, "clean", "C", false, "run the project's clean steps first")
 	c.Flags().BoolVarP(&b.verbose, "verbose", "V", false, "print the full build output")
 	b.platformFlags.add(c)
@@ -321,7 +321,7 @@ its file exists. ` + "`uji build`" + ` runs these steps too.`,
 			return nil
 		},
 	}
-	c.Flags().StringVarP(&appKey, "app", "A", "", "app of the project")
+	c.Flags().StringVar(&appKey, "app", "", "app of the project")
 	return c
 }
 

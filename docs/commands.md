@@ -20,10 +20,10 @@ Builds the app and keeps the artifact in the store. It does not install it.
 
 | Flag | Meaning |
 |---|---|
-| `-A, --app <name>` | The app to build, when the project has more than one |
+| `--app <name>` | The app to build, when the project has more than one |
 | `-C, --clean` | Run the clean steps of the project first |
 | `-V, --verbose` | Print the full output of the build tool |
-| `--android`, `--ios` | Same as the platform words |
+| `-A, --android`, `-I, --ios` | Same as the platform words |
 
 ```sh
 uji build
@@ -48,7 +48,7 @@ selected device in parallel and launches it.
 | `-b, --build <ref>` | Install a stored build. See [refs](store.md#refs) |
 | `--any-branch` | With `--last`, take the newest build of any branch |
 | `--no-launch` | Do not launch the app after the install |
-| `-A`, `-C`, `-V` | Same as `uji build` |
+| `--app`, `-C`, `-V`, `-A`, `-I` | Same as `uji build` |
 
 ```sh
 uji install
@@ -83,7 +83,7 @@ Opens a URL on every running device, or on the selected devices.
 
 ```sh
 uji deeplink "shop://orders/42?tab=details&ref=mail"
-uji deeplink "shop://cart" --android
+uji deeplink "shop://cart" -A    # or --android; -I for iOS
 ```
 
 !!! warning

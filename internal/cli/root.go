@@ -133,7 +133,7 @@ With no selector, a command acts on every running device and booted simulator.`,
 			if !ui.IsTTY(os.Stdout) || !ui.IsTTY(os.Stdin) {
 				return cmd.Help()
 			}
-			return get().openTUI()
+			return get().openScreen()
 		},
 	}
 	root.PersistentFlags().BoolVar(&noSync, "no-sync", false, "do not sync the ujibox app on running devices after a store change")
@@ -152,7 +152,7 @@ With no selector, a command acts on every running device and booted simulator.`,
 	return root
 }
 
-func (a *app) openTUI() error {
+func (a *app) openScreen() error {
 	// Not a.ctx: Ctrl-C inside a command the screen runs also reaches uji, and
 	// that must not cancel the screen.
 	d := tui.Deps{Ctx: context.Background(), Mgr: a.mgr, Store: a.store, Title: ui.Dim("all apps")}

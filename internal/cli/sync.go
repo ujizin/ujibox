@@ -60,7 +60,7 @@ copies the command that installs one; run that command in a Mac terminal.`,
 		},
 	}
 	pf.add(c)
-	c.Flags().StringVarP(&appID, "app", "A", "", "sync only this store app id (see `uji builds --all`)")
+	c.Flags().StringVar(&appID, "app", "", "sync only this store app id (see `uji builds --all`)")
 	return c
 }
 

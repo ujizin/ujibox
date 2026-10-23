@@ -376,7 +376,7 @@ func appCommand(get func() *app, use, short, verb string, fn func(a *app, d devi
 		},
 	}
 	pf.add(c)
-	c.Flags().StringVarP(&appKey, "app", "A", "", "app of the project")
+	c.Flags().StringVar(&appKey, "app", "", "app of the project")
 	return c
 }
 
