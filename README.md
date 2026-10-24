@@ -18,11 +18,13 @@ uji                    # the interactive screen
 
 - Interactive screen: run `uji`
 - Build, with the setup steps of your project
+- Project config on your machine, or shared in the repo (`.ujibox.toml`)
 - Build store by app and branch, kept for 30 days
 - Install on many devices at once, or reinstall a stored build
 - Deeplinks, screenshots and screen recording
 - Boot and shut down emulators and simulators
 - The ujibox app: your builds on the device, synced after each build
+- Agent skills for Claude Code, Codex and Gemini CLI: `uji add skills`
 
 ## Platforms
 

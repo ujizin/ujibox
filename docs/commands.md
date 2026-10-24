@@ -181,12 +181,24 @@ uji also syncs after each change to the store, unless you turn off
 
 | Subcommand | Action |
 |---|---|
-| `uji config project [--force] [--print]` | Detect the project and write its project file |
-| `uji config edit [global]` | Open the project file, or the global config, in `$EDITOR` |
-| `uji config show` | Print the project config with the variables filled in |
-| `uji config path [global]` | Print the path of the file |
+| `uji config project [--repo] [--force] [--print]` | Detect the project and write its project file. `--repo` writes `.ujibox.toml` in the checkout, to [share it](projects.md#share-the-config-in-the-repository) |
+| `uji config edit [global\|repo]` | Open the project file, `.ujibox.toml`, or the global config, in `$EDITOR` |
+| `uji config show` | Print the project config with the variables filled in, and the files it comes from |
+| `uji config path [global\|repo]` | Print the path of the file |
 | `uji config alias <name> <device>` | Give a device a short name |
 | `uji config auto-sync [on\|off]` | Show, or turn on or off, [auto-sync](sync.md#auto-sync) |
+
+### `uji add skills`
+
+Downloads the two agent skills of ujibox and adds them for Claude Code,
+Codex and Gemini CLI. uji asks if they go in this repository or in your home
+folder; `--local` and `--global` answer ahead. `uji add skill` does the same.
+See [Agent skills](skills.md).
+
+```sh
+uji add skills
+uji add skills --global --claude
+```
 
 ### `uji doctor`
 

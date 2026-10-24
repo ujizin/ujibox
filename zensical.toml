@@ -13,6 +13,7 @@ nav = [
   { "Build store" = "store.md" },
   { "Sync and the ujibox app" = "sync.md" },
   { "The ujibox app" = "app.md" },
+  { "Agent skills" = "skills.md" },
   { "Troubleshooting" = "troubleshooting.md" },
 ]
 

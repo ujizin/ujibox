@@ -75,6 +75,19 @@ cd app/iosApp
 xcodegen generate
 ```
 
+## Agent skills
+
+The skills are in `skills/<name>/`, and `skills/index.json` lists each skill
+and its files. `uji add skills` reads the index first, and adds every skill
+in it. Thus add every new skill and file to the index. A test checks that the index, the folders and the `name` in
+each `SKILL.md` agree.
+
+Try the skills from your clone before you push them:
+
+```sh
+uji add skills --from skills
+```
+
 ## The logo and the icons
 
 `art/generate_icons.py` draws the logo and writes these files:

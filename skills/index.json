@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "skills": [
+    {
+      "name": "uji",
+      "description": "Build, install and check an app on emulators, simulators and devices with uji.",
+      "files": ["SKILL.md"]
+    },
+    {
+      "name": "uji-config",
+      "description": "Write or fix the uji project config (.ujibox.toml).",
+      "files": ["SKILL.md"]
+    }
+  ]
+}

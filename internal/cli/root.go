@@ -147,7 +147,7 @@ With no selector, a command acts on every running device and booted simulator.`,
 		cmdBuild(get), cmdInstall(get), cmdSetup(get),
 		cmdDevices(get), cmdDeeplink(get), cmdRecord(get), cmdScreenshot(get),
 		cmdLaunch(get), cmdUninstall(get), cmdBoot(get), cmdShutdown(get),
-		cmdBuilds(get), cmdSync(get), cmdConfig(get), cmdDoctor(get),
+		cmdBuilds(get), cmdSync(get), cmdConfig(get), cmdDoctor(get), cmdAdd(get),
 	)
 	return root
 }

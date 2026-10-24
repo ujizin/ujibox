@@ -1,6 +1,7 @@
 package tui
 
 import (
+	tea "github.com/charmbracelet/bubbletea"
 	"strings"
 	"testing"
 	"time"
@@ -34,4 +35,33 @@ func TestViewLists(t *testing.T) {
 		t.Errorf("targets = %v", got)
 	}
 	t.Log("\n" + v)
+}
+
+func TestChooserKeys(t *testing.T) {
+	m := chooser{title: "Where?", options: []Option{{Label: "a"}, {Label: "b"}}}
+	press := func(m chooser, k tea.KeyMsg) chooser {
+		out, _ := m.Update(k)
+		return out.(chooser)
+	}
+	m = press(m, tea.KeyMsg{Type: tea.KeyDown})
+	if m.cur != 1 {
+		t.Fatalf("down: cur = %d", m.cur)
+	}
+	m = press(m, tea.KeyMsg{Type: tea.KeyDown})
+	if m.cur != 0 {
+		t.Fatalf("down wraps: cur = %d", m.cur)
+	}
+	m = press(m, tea.KeyMsg{Type: tea.KeyUp})
+	if m.cur != 1 {
+		t.Fatalf("up wraps: cur = %d", m.cur)
+	}
+	if done := press(m, tea.KeyMsg{Type: tea.KeyEnter}); !done.done || done.cur != 1 {
+		t.Errorf("enter: %+v", done)
+	}
+	if c := press(m, tea.KeyMsg{Type: tea.KeyEsc}); !c.canceled {
+		t.Error("esc must cancel")
+	}
+	if n := press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}}); !n.done || n.cur != 0 {
+		t.Errorf("1: %+v", n)
+	}
 }
