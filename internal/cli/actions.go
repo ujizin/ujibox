@@ -25,11 +25,16 @@ import (
 
 func cmdDeeplink(get func() *app) *cobra.Command {
 	var pf platformFlags
+	var bundle string
 	c := &cobra.Command{
 		Use:   "deeplink <url> [android|ios|device...]",
 		Short: "Open a deeplink on devices",
 		Long: `Open a URL on every running device, or on the selected ones. Quote the URL
-in your shell: an unquoted & or ? is read by the shell, not by uji.`,
+in your shell: an unquoted & or ? is read by the shell, not by uji.
+
+A physical iPhone cannot open a URL by itself; uji starts an app with it. A
+web link opens in Safari. Another scheme opens in the iOS app of the current
+project. --bundle names the app.`,
 		Example: `  uji deeplink "myapp://orders/42?tab=details"
   uji deeplink "myapp://home" --android
   uji deeplink "https://example.com/promo" "iPhone 17 Pro"`,
@@ -49,13 +54,51 @@ in your shell: an unquoted & or ? is read by the shell, not by uji.`,
 			if err != nil {
 				return err
 			}
+			app := bundle
+			if app == "" && !isWebURL(url) && hasPhysicalIOS(devs) {
+				app = a.projectBundleID()
+			}
 			return forEach(devs, func(d device.Device) (string, error) {
-				return "opened", a.mgr.OpenURL(a.ctx, d, url)
+				return "opened", a.mgr.OpenURL(a.ctx, d, url, app)
 			})
 		},
 	}
 	pf.add(c)
+	c.Flags().StringVar(&bundle, "bundle", "", "physical iPhone: the bundle id of the app that opens the URL")
 	return c
+}
+
+func isWebURL(url string) bool {
+	u := strings.ToLower(url)
+	return strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://")
+}
+
+func hasPhysicalIOS(devs []device.Device) bool {
+	for _, d := range devs {
+		if d.Target() == device.TargetDevice {
+			return true
+		}
+	}
+	return false
+}
+
+// projectBundleID returns the iOS bundle id of the current project's app:
+// from the project file, or from its newest stored iOS build. It returns ""
+// outside a project.
+func (a *app) projectBundleID() string {
+	_, p, ap, err := a.project("")
+	if err != nil || ap.IOS == nil {
+		return ""
+	}
+	if ap.IOS.ID != "" {
+		return ap.IOS.ID
+	}
+	for _, m := range a.store.List(store.Filter{AppID: p.StoreID(ap), Platform: config.IOS}) {
+		if m.PackageID != "" {
+			return m.PackageID
+		}
+	}
+	return ""
 }
 
 // mediaFlags select devices for record and screenshot, whose positional

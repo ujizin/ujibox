@@ -34,17 +34,20 @@ type Request struct {
 	Project  *config.Project
 	App      *config.App
 	Platform string
-	Git      gitinfo.Info
-	Store    *store.Store
-	Tools    device.Tools
-	Clean    bool
-	Verbose  bool
-	Out      io.Writer // status lines
+	// Target is "device" for a signed iOS build for physical devices. Empty
+	// means the default target of the platform.
+	Target  string
+	Git     gitinfo.Info
+	Store   *store.Store
+	Tools   device.Tools
+	Clean   bool
+	Verbose bool
+	Out     io.Writer // status lines
 }
 
 // Error is a failed build. Summary holds the lines that explain the failure.
 type Error struct {
-	Platform string
+	Platform string // "android", "ios" or "ios device"
 	Summary  string
 	Log      string
 	Hint     string
@@ -77,11 +80,39 @@ func indent(s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// Run builds, checks the artifact and stores it.
-func Run(ctx context.Context, r Request) (*store.Manifest, error) {
+// platform returns the config of the request's platform and target.
+func (r Request) platform() (*config.Platform, string, error) {
 	pl := r.App.Platform(r.Platform)
 	if pl == nil {
-		return nil, fmt.Errorf("app %q has no %s config", r.App.Key, r.Platform)
+		return nil, "", fmt.Errorf("app %q has no %s config", r.App.Key, r.Platform)
+	}
+	t := r.Target
+	if t == "" {
+		t = device.DefaultTarget(r.Platform)
+	}
+	if t == device.TargetDevice {
+		dev, err := pl.ForDevice()
+		if err != nil {
+			return nil, "", err
+		}
+		return dev, t, nil
+	}
+	return pl, t, nil
+}
+
+// label is "ios" or "ios device", for status lines and log names.
+func label(platform, target string) string {
+	if target == device.TargetDevice {
+		return platform + " device"
+	}
+	return platform
+}
+
+// Run builds, checks the artifact and stores it.
+func Run(ctx context.Context, r Request) (*store.Manifest, error) {
+	pl, tgt, err := r.platform()
+	if err != nil {
+		return nil, err
 	}
 	vars := config.NewVars(r.Git, r.App, r.Platform)
 
@@ -103,7 +134,7 @@ func Run(ctx context.Context, r Request) (*store.Manifest, error) {
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return nil, err
 	}
-	logPath := filepath.Join(logDir, fmt.Sprintf("%s-%s-%s.log", r.App.Key, r.Platform, time.Now().Format("20060102-150405")))
+	logPath := filepath.Join(logDir, fmt.Sprintf("%s-%s-%s.log", r.App.Key, strings.ReplaceAll(label(r.Platform, tgt), " ", "-"), time.Now().Format("20060102-150405")))
 	logFile, err := os.Create(logPath)
 	if err != nil {
 		return nil, err
@@ -114,16 +145,16 @@ func Run(ctx context.Context, r Request) (*store.Manifest, error) {
 		for _, s := range append(append([]config.Step{}, r.App.Clean...), pl.Clean...) {
 			ui.Info(r.Out, "clean: %s", vars.Expand(s.Run))
 			if err := runShell(ctx, r.Git.Root, env, vars.Expand(s.Run), io.MultiWriter(logFile, verboseOut(r))); err != nil {
-				return nil, &Error{Platform: r.Platform, Err: fmt.Errorf("clean step failed: %w", err), Log: logPath}
+				return nil, &Error{Platform: label(r.Platform, tgt), Err: fmt.Errorf("clean step failed: %w", err), Log: logPath}
 			}
 		}
 	}
 	if err := runSetup(ctx, r, pl, vars, env, logFile); err != nil {
-		return nil, &Error{Platform: r.Platform, Err: err, Log: logPath}
+		return nil, &Error{Platform: label(r.Platform, tgt), Err: err, Log: logPath}
 	}
 
 	start := time.Now()
-	label := fmt.Sprintf("building %s %s", r.App.Name(), r.Platform)
+	status := fmt.Sprintf("building %s %s", r.App.Name(), label(r.Platform, tgt))
 	commands := make([]string, len(pl.Build))
 	for i, c := range pl.Build {
 		commands[i] = vars.Expand(c)
@@ -132,7 +163,7 @@ func Run(ctx context.Context, r Request) (*store.Manifest, error) {
 	retried := false
 	for {
 		offset, _ := logFile.Seek(0, io.SeekCurrent)
-		err = runSteps(ctx, r, label, commands, env, logFile)
+		err = runSteps(ctx, r, status, commands, env, logFile)
 		if err == nil || ctx.Err() != nil || retried {
 			break
 		}
@@ -152,16 +183,16 @@ func Run(ctx context.Context, r Request) (*store.Manifest, error) {
 	}
 	if err != nil {
 		text := readFrom(logPath, 0)
-		return nil, &Error{Platform: r.Platform, Err: err, Summary: Summarize(text), Hint: hintFor(text), Log: logPath}
+		return nil, &Error{Platform: label(r.Platform, tgt), Err: err, Summary: Summarize(text), Hint: hintFor(text), Log: logPath}
 	}
 
 	artifact, err := FindArtifact(r.Git.Root, vars.Expand(pl.Artifact))
 	if err != nil {
-		return nil, &Error{Platform: r.Platform, Err: err, Log: logPath}
+		return nil, &Error{Platform: label(r.Platform, tgt), Err: err, Log: logPath}
 	}
-	id, version, err := Inspect(ctx, r.Platform, artifact, r.Tools.AAPT2)
+	id, version, err := Inspect(ctx, r.Platform, tgt, artifact, r.Tools.AAPT2)
 	if err != nil {
-		return nil, &Error{Platform: r.Platform, Err: err, Log: logPath}
+		return nil, &Error{Platform: label(r.Platform, tgt), Err: err, Log: logPath}
 	}
 	if id == "" {
 		id = pl.ID
@@ -170,7 +201,7 @@ func Run(ctx context.Context, r Request) (*store.Manifest, error) {
 	m := &store.Manifest{
 		App:       store.AppRef{ID: r.Project.StoreID(r.App), Name: r.App.Name(), Project: r.Project.Name},
 		Platform:  r.Platform,
-		Target:    target(r.Platform),
+		Target:    tgt,
 		PackageID: id,
 		Version:   version,
 		Git: store.Git{
@@ -296,13 +327,6 @@ func readFrom(path string, offset int64) string {
 		return ""
 	}
 	return string(data[offset:])
-}
-
-func target(platform string) string {
-	if platform == config.IOS {
-		return device.KindSimulator
-	}
-	return device.KindEmulator
 }
 
 func hash(s string) string {

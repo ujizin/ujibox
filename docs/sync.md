@@ -58,7 +58,10 @@ sync then shows in the app without a refresh.
 ## What sync copies
 
 - **To an Android device:** every stored Android build, as APKs.
-- **To an iOS simulator:** every stored iOS build, as `.app` bundles.
+- **To an iOS simulator:** every stored simulator build, as `.app` bundles.
+- **To a physical iPhone or iPad:** the list of the stored device builds,
+  without the `.app` bundles. The phone cannot install them, and the Mac
+  installs from its own store.
 
 After a sync, the device has the same builds as the store. If a build left
 the store, sync removes it from the device. A second sync copies only the
@@ -66,9 +69,10 @@ builds that are new.
 
 !!! warning "iOS cannot install builds from the app"
     Do not expect the ujibox app to install a build on iOS. iOS does not let
-    an app install other apps, on a device or on a simulator. On a
-    simulator, the ujibox app shows the builds and copies the install
-    command. Paste that command in a Mac terminal to install the build.
+    an app install other apps, on a device or on a simulator. On iOS, the
+    ujibox app shows the builds and copies the install command. Paste that
+    command in a Mac terminal to install the build. On a physical iPhone,
+    Universal Clipboard can carry the command to your Mac.
 
 ## Device layout
 
@@ -78,12 +82,17 @@ uji writes into the storage of the ujibox app:
 |---|---|
 | Android | `/sdcard/Android/data/<sync_package>/files/ujibox` |
 | iOS simulator | `<data container of sync_bundle_id>/Documents/ujibox` |
+| Physical iOS device | The same folder, through `devicectl device copy` |
 
 ```text
 ujibox/index.json
 ujibox/builds/<build-id>/manifest.json
-ujibox/builds/<build-id>/<name>.apk      (or <name>.app)
+ujibox/builds/<build-id>/<name>.apk      (or <name>.app; none on a physical iOS device)
 ```
+
+`devicectl` cannot delete a file on a physical device. When a build leaves
+the store, its folder on the device stays, empty. The app reads only the
+builds in `index.json`.
 
 Install the ujibox app before the sync; see [The ujibox app](app.md).
 Set its package and bundle id with `sync_package` and `sync_bundle_id` in the
@@ -156,9 +165,9 @@ row needs.
 | `kind` | Platform | Fields | What the app does |
 |---|---|---|---|
 | `apk` | Android | `file` | Installs the APK with the Android PackageInstaller |
-| `command` | iOS simulator | `command` | Copies the command to the pasteboard |
+| `command` | iOS | `command` | Copies the command to the pasteboard |
 
-An iOS `command` looks like this:
+On a simulator, the `command` looks like this:
 
 ```sh
 xcrun simctl install 1A2B3C4D-0000-4000-8000-000000000001 '/Users/me/Library/Developer/CoreSimulator/Devices/…/Documents/ujibox/builds/01M…/Shop Dev.app'
@@ -166,3 +175,11 @@ xcrun simctl install 1A2B3C4D-0000-4000-8000-000000000001 '/Users/me/Library/Dev
 
 The command contains the UDID of the simulator and the path of the synced
 copy. It works while that copy exists, until a later sync removes the build.
+
+On a physical device, the `command` installs the stored build from the Mac:
+
+```sh
+uji install -b 01M5J9PKMND810HTS059E7SR92 00000000-0000000000000001
+```
+
+It works while the build is in the store of that Mac.

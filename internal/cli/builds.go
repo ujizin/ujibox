@@ -60,7 +60,7 @@ builds of each branch and every pinned build stay.`,
 				if pinned {
 					state = "pinned"
 				}
-				ui.OK(os.Stdout, "%s build %s (%s %s %s)", state, m.ShortID(), m.App.Name, m.Platform, m.Group())
+				ui.OK(os.Stdout, "%s build %s (%s %s %s)", state, m.ShortID(), m.App.Name, targetLabel(m.Target), m.Group())
 				a.autoSync(m.Platform)
 				return nil
 			},
@@ -83,7 +83,7 @@ builds of each branch and every pinned build stay.`,
 			if err := a.store.Remove(m); err != nil {
 				return err
 			}
-			ui.OK(os.Stdout, "removed build %s (%s %s %s)", m.ShortID(), m.App.Name, m.Platform, m.Group())
+			ui.OK(os.Stdout, "removed build %s (%s %s %s)", m.ShortID(), m.App.Name, targetLabel(m.Target), m.Group())
 			a.autoSync(m.Platform)
 			return nil
 		},
@@ -122,7 +122,7 @@ builds of each branch and every pinned build stay.`,
 			var freed int64
 			for _, m := range removed {
 				freed += m.Artifact.Size
-				ui.Info(os.Stdout, "%s %s %s %s %s (built %s)", verb, m.App.Name, m.Platform, m.Group(), m.ShortID(), ui.Ago(m.CreatedAt))
+				ui.Info(os.Stdout, "%s %s %s %s %s (built %s)", verb, m.App.Name, targetLabel(m.Target), m.Group(), m.ShortID(), ui.Ago(m.CreatedAt))
 			}
 			for _, e := range errs {
 				ui.Warn(os.Stderr, "%v", e)
@@ -250,7 +250,7 @@ func listBuilds(a *app, lf listFlags) error {
 					flags += ui.Yellow("dirty")
 				}
 				rows = append(rows, []string{
-					"    " + fmt.Sprint(i+1), m.Platform, versionText(m), m.ShortSHA(), ui.Ago(m.CreatedAt),
+					"    " + fmt.Sprint(i+1), targetLabel(m.Target), versionText(m), m.ShortSHA(), ui.Ago(m.CreatedAt),
 					ui.Size(m.Artifact.Size), ui.Dim(m.ShortID()), flags,
 				})
 			}

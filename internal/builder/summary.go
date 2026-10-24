@@ -86,6 +86,9 @@ func hintFor(log string) string {
 		return "Xcode crashed during the build; run it again, and with --clean if it fails again"
 	case strings.Contains(log, "SDK location not found"):
 		return "Gradle cannot find the Android SDK; add a setup step that writes local.properties, or set ANDROID_HOME"
+	case strings.Contains(log, "requires a development team"), strings.Contains(log, "No profiles for"),
+		strings.Contains(log, "No signing certificate"), strings.Contains(log, "No Account for Team"):
+		return "a device build needs code signing: sign in to Xcode with your Apple ID (Settings > Accounts), then set the team in the Xcode project or add DEVELOPMENT_TEAM=<team id> to the device build command"
 	case strings.Contains(log, "No such module"), strings.Contains(log, "does not contain a scheme"):
 		return "the Xcode project may need to be generated first; add the generator as a setup step"
 	}

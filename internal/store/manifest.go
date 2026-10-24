@@ -21,7 +21,7 @@ type Manifest struct {
 	ID        string    `json:"id"`
 	App       AppRef    `json:"app"`
 	Platform  string    `json:"platform"`
-	Target    string    `json:"target"` // "emulator" for an APK, "simulator" for an .app
+	Target    string    `json:"target"` // "emulator" for an APK; "simulator" or "device" for an .app
 	PackageID string    `json:"package_id"`
 	Version   Version   `json:"version"`
 	Git       Git       `json:"git"`

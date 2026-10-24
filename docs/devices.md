@@ -3,12 +3,13 @@
 Most commands take device selectors. A selector is one of these words:
 
 - `android`: every running Android device and emulator.
-- `ios`: every booted simulator.
+- `ios`: every booted simulator, and every physical iPhone or iPad on a cable.
 - `all`: both platforms.
 - A device name.
 
-With no selector, a command uses every running device and every booted
-simulator. It does not boot a device in this case.
+With no selector, a command uses every running device, every booted
+simulator and every physical iPhone on a cable. It does not boot a device in
+this case.
 
 ## Device names
 
@@ -16,7 +17,8 @@ uji compares a name with each device in this order:
 
 1. An alias from the global config.
 2. The exact serial (Android) or UDID (simulator).
-3. The exact name: the AVD name, the model of a phone, or the simulator name.
+3. The exact name: the AVD name, the model of an Android phone, the simulator
+   name, or the name of an iPhone.
 4. The start of a name, serial or UDID.
 
 If a name matches more than one device, uji stops and lists the matches.
@@ -43,6 +45,30 @@ uji install Pixel_9_Pro_Fold
 uji boot "iPhone 17 Pro"
 ```
 
+## Physical iPhones and iPads
+
+uji drives a physical iOS device with `xcrun devicectl`, which comes with
+Xcode 15 or later. Screenshots and screen recording need Xcode 27 or later.
+
+Before the first use:
+
+1. Connect the device to the Mac with a cable.
+2. Unlock it, and tap **Trust** when it asks.
+3. Turn on Developer Mode in **Settings > Privacy & Security > Developer
+   Mode**, then restart the device.
+
+After the pairing, devicectl also finds the device on the same network.
+`uji devices` shows such a device as `device (network)`. A command with no
+device name does not use a device on the network: it can be someone
+else's. Name the device to use it:
+
+```sh
+uji install "My iPhone"
+```
+
+A physical device needs a signed device build. See
+[Device builds](projects.md#device-builds).
+
 ## Aliases
 
 Give a long name a short alias:
@@ -61,7 +87,8 @@ words `android`, `ios` and `all` cannot be aliases.
 |---|---|---|
 | `ready` | Accepts installs | Nothing |
 | `off` | An AVD or simulator that is not running | Name it, or run `uji boot` |
-| `unauthorized` | The phone did not accept this computer | Unlock the phone and accept the USB debugging prompt |
-| `offline` | adb lost the device | Reconnect the cable, or run `adb reconnect` |
+| `unauthorized` | The phone did not accept this computer | Unlock the phone. Accept the USB debugging prompt (Android), or tap Trust (iPhone) |
+| `offline` | adb lost the device, or an iPhone is out of reach | Reconnect the cable, or run `adb reconnect`. Unlock the iPhone |
+| `no-dev-mode` | An iPhone with Developer Mode off | Turn it on in Settings > Privacy & Security > Developer Mode |
 
 uji leaves `unauthorized` and `offline` devices out of "every running device".

@@ -6,7 +6,8 @@
 - Go 1.26 or later, to build uji from source.
 - For Android: the Android SDK (`adb`, `emulator`, `aapt2`). uji finds it
   through `ANDROID_HOME`, `ANDROID_SDK_ROOT` or `~/Library/Android/sdk`.
-- For iOS: Xcode with the simulator runtimes.
+- For iOS: Xcode with the simulator runtimes. Physical iPhones need Xcode 15
+  or later, and Xcode 27 or later for screenshots and recording.
 - For Android recording: [scrcpy](https://github.com/Genymobile/scrcpy).
   Install it with `brew install scrcpy`.
 

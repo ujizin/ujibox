@@ -21,9 +21,10 @@ import (
 
 // buildFlags are shared by build and install.
 type buildFlags struct {
-	app     string
-	clean   bool
-	verbose bool
+	app       string
+	clean     bool
+	verbose   bool
+	iosDevice bool // uji build only
 	platformFlags
 }
 
@@ -42,10 +43,13 @@ func cmdBuild(get func() *app) *cobra.Command {
 		Long: `Build the app of the current checkout and keep the artifact in the store.
 
 With no selector, uji builds every platform the app has. A platform word builds
-only that platform; a device name builds the platform of that device.`,
+only that platform; a device name builds what that device needs. iOS builds
+are for simulators; --ios-device, or the name of a physical iPhone, makes a
+signed build for physical devices.`,
 		Example: `  uji build
   uji build android
-  uji build ios --clean`,
+  uji build ios --clean
+  uji build --ios-device`,
 		GroupID: "build",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a := get()
@@ -54,32 +58,41 @@ only that platform; a device name builds the platform of that device.`,
 				return err
 			}
 			sel := device.ParseSelectors(args, bf.android, bf.ios)
-			platforms := sel.PlatformsOr(ap.Platforms())
+			var targets []string
+			for _, pl := range sel.PlatformsOr(ap.Platforms()) {
+				targets = append(targets, device.DefaultTarget(pl))
+			}
 			if len(sel.Names) > 0 {
 				devs, err := a.mgr.Resolve(a.ctx, sel, ap.Platforms())
 				if err != nil {
 					return err
 				}
-				platforms = devicePlatforms(devs)
+				targets = deviceTargets(devs)
 			}
-			platforms, err = supported(ap, platforms)
-			if err != nil {
+			if bf.iosDevice {
+				targets = []string{device.TargetDevice}
+			}
+			if _, err := supported(ap, targetPlatforms(targets)); err != nil {
 				return err
 			}
 			announce(g, p, ap)
 			var built []string
 			defer func() { a.autoSync(built...) }()
-			for _, pl := range platforms {
-				if _, err := a.build(g, p, ap, pl, bf); err != nil {
+			for _, t := range targets {
+				if ap.Platform(device.TargetPlatform(t)) == nil {
+					continue
+				}
+				if _, err := a.build(g, p, ap, t, bf); err != nil {
 					return err
 				}
-				built = append(built, pl)
+				built = append(built, device.TargetPlatform(t))
 			}
 			a.store.MaybePrune(a.policy())
 			return nil
 		},
 	}
 	bf.add(c)
+	c.Flags().BoolVar(&bf.iosDevice, "ios-device", false, "build the iOS app for physical devices (needs code signing)")
 	return c
 }
 
@@ -95,15 +108,15 @@ func announce(g gitinfo.Info, p *config.Project, ap *config.App) {
 	ui.Info(os.Stderr, "%s · %s · %s@%s%s", ui.Bold(ap.Name()), src, g.Group(), g.ShortSHA(), dirty)
 }
 
-func (a *app) build(g gitinfo.Info, p *config.Project, ap *config.App, platform string, bf buildFlags) (*store.Manifest, error) {
+func (a *app) build(g gitinfo.Info, p *config.Project, ap *config.App, target string, bf buildFlags) (*store.Manifest, error) {
 	m, err := builder.Run(a.ctx, builder.Request{
-		Project: p, App: ap, Platform: platform, Git: g, Store: a.store, Tools: a.mgr.Tools,
-		Clean: bf.clean, Verbose: bf.verbose, Out: os.Stderr,
+		Project: p, App: ap, Platform: device.TargetPlatform(target), Target: target, Git: g, Store: a.store,
+		Tools: a.mgr.Tools, Clean: bf.clean, Verbose: bf.verbose, Out: os.Stderr,
 	})
 	if err != nil {
 		return nil, err
 	}
-	ui.OK(os.Stderr, "%s %s %s · %s · %s · %s", ap.Name(), platform, versionText(m), ui.Size(m.Artifact.Size),
+	ui.OK(os.Stderr, "%s %s %s · %s · %s · %s", ap.Name(), targetLabel(target), versionText(m), ui.Size(m.Artifact.Size),
 		ui.Elapsed(msDuration(m.Build.DurationMS)), ui.Dim("build "+m.ShortID()))
 	ui.Info(os.Stderr, "%s", ui.Dim(paths.Pretty(m.ArtifactPath())))
 	return m, nil
@@ -117,6 +130,53 @@ func versionText(m *store.Manifest) string {
 		return m.Version.Name
 	}
 	return m.PackageID
+}
+
+// targetLabel is "android", "ios" or "ios device".
+func targetLabel(target string) string {
+	if target == device.TargetDevice {
+		return config.IOS + " device"
+	}
+	return device.TargetPlatform(target)
+}
+
+// targetFor says what a build of the target runs on: "Android devices",
+// "iOS simulators" or "physical iOS devices".
+func targetFor(target string) string {
+	switch target {
+	case device.TargetDevice:
+		return "physical iOS devices"
+	case device.TargetSimulator:
+		return "iOS simulators"
+	}
+	return "Android devices"
+}
+
+// deviceTargets returns the build targets that the devices need, in a fixed order.
+func deviceTargets(devs []device.Device) []string {
+	var out []string
+	for _, t := range []string{device.TargetEmulator, device.TargetSimulator, device.TargetDevice} {
+		for _, d := range devs {
+			if d.Target() == t {
+				out = append(out, t)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// targetPlatforms returns the platforms of the targets, without repeats.
+func targetPlatforms(targets []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, t := range targets {
+		if p := device.TargetPlatform(t); !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func devicePlatforms(devs []device.Device) []string {
@@ -196,32 +256,32 @@ every running device and never boots one.`,
 				ref = "last"
 			}
 
-			// Pick or build one artifact per platform before touching any device.
+			// Pick or build one artifact per target before touching any device.
 			builds := map[string]*store.Manifest{}
 			buildErrs := map[string]error{}
 			announce(g, p, ap)
-			for _, pl := range devicePlatforms(devs) {
-				if ap.Platform(pl) == nil {
+			for _, t := range deviceTargets(devs) {
+				if ap.Platform(device.TargetPlatform(t)) == nil {
 					continue
 				}
 				var m *store.Manifest
 				if ref != "" {
-					m, err = a.pick(g, p, ap, pl, ref, anyBranch)
+					m, err = a.pick(g, p, ap, t, ref, anyBranch)
 				} else {
-					m, err = a.build(g, p, ap, pl, bf)
+					m, err = a.build(g, p, ap, t, bf)
 				}
 				if err != nil {
 					if a.ctx.Err() != nil {
 						return err
 					}
-					buildErrs[pl] = err
+					buildErrs[t] = err
 					var be *builder.Error
 					if errors.As(err, &be) || ref != "" {
 						ui.Fail(os.Stderr, "%v", err)
 					}
 					continue
 				}
-				builds[pl] = m
+				builds[t] = m
 			}
 			if len(builds) == 0 {
 				return &quietError{"nothing to install"}
@@ -236,17 +296,17 @@ every running device and never boots one.`,
 					defer l.Unlock()
 				}
 			}
-			err = a.installOn(devs, builds, noLaunch, func(platform string) error {
-				if e := buildErrs[platform]; e != nil {
-					return fmt.Errorf("no %s build: %s", platform, firstLine(e.Error()))
+			err = a.installOn(devs, builds, noLaunch, func(target string) error {
+				if e := buildErrs[target]; e != nil {
+					return fmt.Errorf("no %s build: %s", targetLabel(target), firstLine(e.Error()))
 				}
-				return fmt.Errorf("%s has no %s config", ap.Name(), platform)
+				return fmt.Errorf("%s has no %s config", ap.Name(), device.TargetPlatform(target))
 			})
 			if ref == "" {
 				a.store.MaybePrune(a.policy())
 				var built []string
-				for pl := range builds {
-					built = append(built, pl)
+				for t := range builds {
+					built = append(built, device.TargetPlatform(t))
 				}
 				sort.Strings(built)
 				a.autoSync(built...)
@@ -263,17 +323,20 @@ every running device and never boots one.`,
 }
 
 // pick finds a stored build and warns when it differs from the checkout.
-func (a *app) pick(g gitinfo.Info, p *config.Project, ap *config.App, platform, ref string, anyBranch bool) (*store.Manifest, error) {
-	scope := store.Filter{AppID: p.StoreID(ap), Platform: platform, Group: g.Group()}
+func (a *app) pick(g gitinfo.Info, p *config.Project, ap *config.App, target, ref string, anyBranch bool) (*store.Manifest, error) {
+	platform := targetLabel(target)
+	scope := store.Filter{AppID: p.StoreID(ap), Platform: device.TargetPlatform(target), Target: target, Group: g.Group()}
 	if anyBranch {
 		scope.Group = ""
 	}
 	m, err := a.store.Find(ref, scope)
 	if errors.Is(err, store.ErrNoBuild) && ref == "last" && !anyBranch {
-		others := a.store.List(store.Filter{AppID: scope.AppID, Platform: platform})
+		others := a.store.List(store.Filter{AppID: scope.AppID, Platform: scope.Platform, Target: target})
 		msg := fmt.Sprintf("no stored %s build of %s for %s", platform, ap.Name(), g.Group())
 		if len(others) > 0 {
 			msg += fmt.Sprintf("; the newest is from %s (%s); use --any-branch or -b %q", others[0].Group(), ui.Ago(others[0].CreatedAt), others[0].Group())
+		} else if target == device.TargetDevice {
+			msg += "; run `uji build --ios-device` first"
 		} else {
 			msg += "; run `uji build` first"
 		}
@@ -281,6 +344,10 @@ func (a *app) pick(g gitinfo.Info, p *config.Project, ap *config.App, platform, 
 	}
 	if err != nil {
 		return nil, err
+	}
+	// A build id or sha can name a build of another target.
+	if m.Target != target {
+		return nil, fmt.Errorf("build %s is for %s; this device needs a build for %s", m.ShortID(), targetFor(m.Target), targetFor(target))
 	}
 	ui.Info(os.Stderr, "%s: stored build %s · %s@%s · %s", platform, m.ShortID(), m.Group(), m.ShortSHA(), ui.Ago(m.CreatedAt))
 	if m.Group() == g.Group() && m.Git.SHA != g.SHA {
@@ -328,11 +395,13 @@ its file exists. ` + "`uji build`" + ` runs these steps too.`,
 func msDuration(ms int64) time.Duration { return time.Duration(ms) * time.Millisecond }
 
 // installOn installs one build per platform on each device, in parallel.
+// installOn installs on each device the build of its target. builds is keyed
+// by target; missing explains a target without a build.
 func (a *app) installOn(devs []device.Device, builds map[string]*store.Manifest, noLaunch bool, missing func(string) error) error {
 	return forEach(devs, func(d device.Device) (string, error) {
-		m := builds[d.Platform]
+		m := builds[d.Target()]
 		if m == nil {
-			return "", missing(d.Platform)
+			return "", missing(d.Target())
 		}
 		if err := a.mgr.Install(a.ctx, d, m.ArtifactPath()); err != nil {
 			return "", err
@@ -360,6 +429,19 @@ func (a *app) installStored(ref string, args []string, bf buildFlags, noLaunch b
 	if err != nil {
 		return err
 	}
+	if len(sel.Names) == 0 {
+		// With no names, use only the devices that this build runs on.
+		var fit []device.Device
+		for _, d := range devs {
+			if d.Target() == m.Target {
+				fit = append(fit, d)
+			}
+		}
+		if len(fit) == 0 {
+			return fmt.Errorf("build %s is for %s; none is ready", m.ShortID(), targetFor(m.Target))
+		}
+		devs = fit
+	}
 	devs, err = a.mgr.EnsureReady(a.ctx, devs, func(s string) { ui.Info(os.Stderr, "%s", s) })
 	if err != nil {
 		return err
@@ -367,7 +449,7 @@ func (a *app) installStored(ref string, args []string, bf buildFlags, noLaunch b
 	if l := a.store.Use(m); l != nil {
 		defer l.Unlock()
 	}
-	return a.installOn(devs, map[string]*store.Manifest{m.Platform: m}, noLaunch, func(platform string) error {
-		return fmt.Errorf("build %s is for %s", m.ShortID(), m.Platform)
+	return a.installOn(devs, map[string]*store.Manifest{m.Target: m}, noLaunch, func(target string) error {
+		return fmt.Errorf("build %s is for %s; this device needs a build for %s", m.ShortID(), targetFor(m.Target), targetFor(target))
 	})
 }

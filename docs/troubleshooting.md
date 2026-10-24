@@ -15,9 +15,18 @@ of the full log. The logs are in `~/Library/Caches/ujibox/logs`.
 **"has no Info.plist; the build was interrupted"**
 :   A build stopped before it finished the `.app`. Run the build again.
 
-**"is built for iphoneos"**
-:   The build made a device app. Use a simulator destination:
+**"is built for iphoneos, not for a simulator"**
+:   The simulator build made a device app. Use a simulator destination:
     `-destination "generic/platform=iOS Simulator"`.
+
+**"is built for iphonesimulator, not for a physical device"**
+:   The device build made a simulator app. Use a device destination in
+    `[apps.<key>.ios.device]`: `-destination "generic/platform=iOS"`.
+
+**"Signing for … requires a development team"**
+:   A device build needs code signing. Sign in to Xcode with your Apple ID
+    (**Settings > Accounts**). Then set the team in the Xcode project, or add
+    `DEVELOPMENT_TEAM=<team id>` to the device build command.
 
 **"SDK location not found"**
 :   Gradle cannot find the Android SDK. The checkout has no
@@ -58,6 +67,17 @@ of the full log. The logs are in `~/Library/Caches/ujibox/logs`.
 **"is unauthorized"**
 :   Unlock the phone and accept the USB debugging prompt.
 
+**"this device needs a build for physical iOS devices"**
+:   A physical iPhone cannot run a simulator build. Run
+    `uji build --ios-device`, or name the iPhone in `uji install`.
+
+**"is not paired" or "has Developer Mode off"**
+:   Connect the iPhone with a cable, unlock it and tap **Trust**. Turn on
+    Developer Mode in **Settings > Privacy & Security > Developer Mode**.
+
+**"The device is locked"**
+:   Unlock the iPhone, then run the command again.
+
 ## Devices
 
 **"matches 2 devices"**
@@ -80,6 +100,10 @@ of the full log. The logs are in `~/Library/Caches/ujibox/logs`.
 **The iOS video is very short**
 :   `simctl` records a frame only when the screen changes. A screen that does
     not change gives a short video.
+
+**The video of a physical iPhone misses the first seconds**
+:   `devicectl` needs a few seconds to start the recording. Wait for the
+    device screen to change before you start the action to record.
 
 ## Deeplinks
 

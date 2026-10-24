@@ -92,32 +92,50 @@ func (m *Manager) bootIOS(ctx context.Context, d Device) (Device, error) {
 }
 
 func (m *Manager) installIOS(ctx context.Context, d Device, app string) error {
+	if d.Kind == KindPhysical {
+		return m.installDevice(ctx, d, app)
+	}
 	_, err := m.simctl(ctx, "install", d.ID, app)
 	return err
 }
 
 func (m *Manager) launchIOS(ctx context.Context, d Device, bundleID string) error {
+	if d.Kind == KindPhysical {
+		return m.launchDevice(ctx, d, bundleID)
+	}
 	_, err := m.simctl(ctx, "launch", d.ID, bundleID)
 	return err
 }
 
 func (m *Manager) uninstallIOS(ctx context.Context, d Device, bundleID string) error {
+	if d.Kind == KindPhysical {
+		return m.uninstallDevice(ctx, d, bundleID)
+	}
 	_, err := m.simctl(ctx, "uninstall", d.ID, bundleID)
 	return err
 }
 
-func (m *Manager) openURLIOS(ctx context.Context, d Device, url string) error {
+func (m *Manager) openURLIOS(ctx context.Context, d Device, url, bundleID string) error {
+	if d.Kind == KindPhysical {
+		return m.openURLDevice(ctx, d, url, bundleID)
+	}
 	// simctl takes an argv, so the URL needs no quoting here.
 	_, err := m.simctl(ctx, "openurl", d.ID, url)
 	return err
 }
 
 func (m *Manager) screenshotIOS(ctx context.Context, d Device, file string) error {
+	if d.Kind == KindPhysical {
+		return m.screenshotDevice(ctx, d, file)
+	}
 	_, err := m.simctl(ctx, "io", d.ID, "screenshot", file)
 	return err
 }
 
 func (m *Manager) recordIOS(d Device, file string) (*exec.Cmd, error) {
+	if d.Kind == KindPhysical {
+		return m.recordDevice(d, file)
+	}
 	if !m.Tools.HasSimctl() {
 		return nil, errNoSimctl
 	}
@@ -126,7 +144,8 @@ func (m *Manager) recordIOS(d Device, file string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-// AppContainer returns the data container of an installed simulator app.
+// AppContainer returns the data container of an installed simulator app. A
+// physical device has no container path on the Mac; see CopyToApp.
 func (m *Manager) AppContainer(ctx context.Context, d Device, bundleID string) (string, error) {
 	return m.simctl(ctx, "get_app_container", d.ID, bundleID, "data")
 }

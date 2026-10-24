@@ -8,6 +8,9 @@
 //
 // Android: the app's external files dir, /sdcard/Android/data/<pkg>/files.
 // iOS simulator: the app's data container, <container>/Documents.
+// Physical iOS device: the same Documents folder, through devicectl. It gets
+// only the manifests: the phone cannot install the .app, and the install
+// command runs on the Mac with the stored build.
 package syncer
 
 import (
@@ -112,6 +115,17 @@ func Sync(ctx context.Context, mgr *device.Manager, g config.Global, d device.De
 		}
 		t = &androidTarget{mgr: mgr, dev: d, root: "/sdcard/Android/data/" + g.SyncPackage + "/files/ujibox"}
 	case config.IOS:
+		if d.Kind == device.KindPhysical {
+			ok, err := mgr.AppInstalled(ctx, d, g.SyncBundleID)
+			if err != nil {
+				return Result{}, err
+			}
+			if !ok {
+				return Result{}, fmt.Errorf("%w on %s (%s)", ErrNoApp, d.Label(), g.SyncBundleID)
+			}
+			t = &phoneTarget{mgr: mgr, dev: d, bundle: g.SyncBundleID}
+			break
+		}
 		dir, err := mgr.AppContainer(ctx, d, g.SyncBundleID)
 		if err != nil || dir == "" {
 			return Result{}, fmt.Errorf("%w on %s (%s)", ErrNoApp, d.Label(), g.SyncBundleID)
@@ -304,4 +318,67 @@ func (t *simTarget) writeIndex(ctx context.Context, data []byte) error {
 func (t *simTarget) installFor(m *store.Manifest) Install {
 	app := filepath.Join(t.root, "builds", m.ID, m.Artifact.File)
 	return Install{Kind: "command", Command: "xcrun simctl install " + t.dev.ID + " " + proc.ShellQuote(app)}
+}
+
+// phoneTarget writes into the ujibox app on a physical iOS device with
+// devicectl. devicectl cannot delete or rename a file, so a removed build
+// becomes an empty folder, and index.json is written in place.
+type phoneTarget struct {
+	mgr    *device.Manager
+	dev    device.Device
+	bundle string
+}
+
+const phoneRoot = "Documents/ujibox"
+
+func (t *phoneTarget) readIndex(ctx context.Context) (*Index, error) {
+	dir, err := os.MkdirTemp("", "uji-index-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	local := filepath.Join(dir, "index.json")
+	if err := t.mgr.CopyFromApp(ctx, t.dev, t.bundle, phoneRoot+"/index.json", local); err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(local)
+	if err != nil {
+		return nil, err
+	}
+	idx := &Index{}
+	if err := json.Unmarshal(data, idx); err != nil {
+		return nil, err
+	}
+	return idx, nil
+}
+
+func (t *phoneTarget) push(ctx context.Context, m *store.Manifest) error {
+	return t.mgr.CopyToApp(ctx, t.dev, t.bundle, filepath.Join(m.Dir, "manifest.json"),
+		phoneRoot+"/builds/"+m.ID+"/manifest.json", false)
+}
+
+func (t *phoneTarget) remove(ctx context.Context, id string) error {
+	empty, err := os.MkdirTemp("", "uji-empty-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(empty)
+	return t.mgr.CopyToApp(ctx, t.dev, t.bundle, empty, phoneRoot+"/builds/"+id, true)
+}
+
+func (t *phoneTarget) writeIndex(ctx context.Context, data []byte) error {
+	dir, err := os.MkdirTemp("", "uji-index-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	local := filepath.Join(dir, "index.json")
+	if err := os.WriteFile(local, data, 0o644); err != nil {
+		return err
+	}
+	return t.mgr.CopyToApp(ctx, t.dev, t.bundle, local, phoneRoot+"/index.json", false)
+}
+
+func (t *phoneTarget) installFor(m *store.Manifest) Install {
+	return Install{Kind: "command", Command: "uji install -b " + m.ID + " " + proc.ShellQuote(t.dev.ID)}
 }

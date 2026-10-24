@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ujizin/ujibox/internal/config"
+	"github.com/ujizin/ujibox/internal/device"
 	"github.com/ujizin/ujibox/internal/store"
 )
 
@@ -68,12 +69,12 @@ func FindArtifact(root, pattern string) (string, error) {
 // Inspect checks that an artifact is complete and reads its identity. An
 // interrupted iOS build leaves a bundle without Info.plist; simctl then fails
 // with "Missing bundle ID", so that bundle is rejected here.
-func Inspect(ctx context.Context, platform, path, aapt2 string) (id string, v store.Version, err error) {
+func Inspect(ctx context.Context, platform, target, path, aapt2 string) (id string, v store.Version, err error) {
 	switch platform {
 	case config.Android:
 		return inspectAPK(ctx, path, aapt2)
 	case config.IOS:
-		return inspectApp(ctx, path)
+		return inspectApp(ctx, path, target)
 	}
 	return "", v, fmt.Errorf("unknown platform %q", platform)
 }
@@ -126,7 +127,7 @@ func inspectAPK(ctx context.Context, path, aapt2 string) (string, store.Version,
 	return id, v, nil
 }
 
-func inspectApp(ctx context.Context, path string) (string, store.Version, error) {
+func inspectApp(ctx context.Context, path, target string) (string, store.Version, error) {
 	v := store.Version{}
 	if !strings.HasSuffix(path, ".app") {
 		return "", v, fmt.Errorf("%s is not an .app bundle", path)
@@ -151,8 +152,12 @@ func inspectApp(ctx context.Context, path string) (string, store.Version, error)
 			return "", v, fmt.Errorf("%s has no executable %s; the build was interrupted, run it again", path, exe)
 		}
 	}
-	if p := read("DTPlatformName"); p != "" && p != "iphonesimulator" {
-		return "", v, fmt.Errorf("%s is built for %s; ujibox installs simulator builds (iphonesimulator)", path, p)
+	want, other := "iphonesimulator", "a simulator"
+	if target == device.TargetDevice {
+		want, other = "iphoneos", "a physical device"
+	}
+	if p := read("DTPlatformName"); p != "" && p != want {
+		return "", v, fmt.Errorf("%s is built for %s, not for %s (%s); check the destination of the build command", path, p, other, want)
 	}
 	v.Name = read("CFBundleShortVersionString")
 	v.Code = read("CFBundleVersion")

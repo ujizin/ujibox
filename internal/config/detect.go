@@ -318,6 +318,14 @@ func detectIOS(root, container string, slow bool) (*Platform, []string) {
 		`xcodebuild %s %s -scheme %s -configuration Debug -destination "generic/platform=iOS Simulator" -derivedDataPath "{derived_data}" build`,
 		flag, shellWord(container), shellWord(scheme))}
 	pl.Artifact = filepath.Join("{derived_data}", "Build", "Products", "Debug-iphonesimulator", product)
+	// A device build needs signing: the team of the Xcode project, and
+	// -allowProvisioningUpdates lets Xcode create the profile.
+	pl.Device = &DeviceBuild{
+		Build: []string{fmt.Sprintf(
+			`xcodebuild %s %s -scheme %s -configuration Debug -destination "generic/platform=iOS" -derivedDataPath "{derived_data}" -allowProvisioningUpdates build`,
+			flag, shellWord(container), shellWord(scheme))},
+		Artifact: filepath.Join("{derived_data}", "Build", "Products", "Debug-iphoneos", product),
+	}
 	return pl, notes
 }
 
@@ -553,6 +561,15 @@ func (d *Detection) Render() string {
 			}
 			for _, r := range pl.Retry {
 				fmt.Fprintf(&b, "\n[[apps.%s.%s.retry]]\nmatch = %s\nthen = %s\n", tomlKey(k), name, tomlString(r.Match), tomlString(r.Then))
+			}
+			if name == IOS && pl.Device != nil {
+				fmt.Fprintf(&b, "\n# The build for physical devices. It needs code signing: if the Xcode project\n")
+				fmt.Fprintf(&b, "# has no team, add DEVELOPMENT_TEAM=<team id> to the xcodebuild line.\n")
+				fmt.Fprintf(&b, "[apps.%s.ios.device]\nbuild = [\n", tomlKey(k))
+				for _, c := range pl.Device.Build {
+					fmt.Fprintf(&b, "  %s,\n", tomlString(c))
+				}
+				fmt.Fprintf(&b, "]\nartifact = %s\n", tomlString(pl.Device.Artifact))
 			}
 			if name == IOS {
 				fmt.Fprintf(&b, "\n# Steps that run before every build, for example a project generator:\n")

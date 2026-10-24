@@ -15,8 +15,9 @@ for that command.
 Builds the app and keeps the artifact in the store. It does not install it.
 
 - With no selector, uji builds every platform of the app.
-- `android` or `ios` builds one platform.
-- A device name builds the platform of that device.
+- `android` or `ios` builds one platform. An iOS build is for simulators.
+- A device name builds what that device needs. A physical iPhone needs a
+  [device build](projects.md#device-builds).
 
 | Flag | Meaning |
 |---|---|
@@ -24,10 +25,12 @@ Builds the app and keeps the artifact in the store. It does not install it.
 | `-C, --clean` | Run the clean steps of the project first |
 | `-V, --verbose` | Print the full output of the build tool |
 | `-A, --android`, `-I, --ios` | Same as the platform words |
+| `--ios-device` | Make the signed iOS build for physical devices |
 
 ```sh
 uji build
 uji build ios --clean
+uji build --ios-device
 ```
 
 ### `uji install [selector...]`
@@ -35,8 +38,9 @@ uji build ios --clean
 Builds the app, keeps the build in the store, then installs it on each
 selected device in parallel and launches it.
 
-- uji builds each platform one time, then installs that build on every
-  device of the platform.
+- uji makes each kind of build one time, then installs it on every device
+  that takes it. Android devices share one APK. iOS simulators share one
+  simulator build, and physical iPhones share one device build.
 - If you name an AVD or a simulator that is off, uji boots it first.
 - With no selector, uji uses every running device. It does not boot a device.
 - At the end, uji prints one line for each device. If one device fails, the
@@ -92,6 +96,13 @@ uji deeplink "shop://cart" -A    # or --android; -I for iOS
 
 uji quotes the URL for the Android device shell, so `&`, `#`, spaces and `'`
 arrive unchanged.
+
+A physical iPhone cannot open a URL by itself, so uji starts an app with the
+URL:
+
+- A web link (`http` or `https`) opens in Safari.
+- Another scheme opens in the iOS app of the current project.
+- `--bundle <bundle id>` names the app.
 
 ### `uji record [path]`
 

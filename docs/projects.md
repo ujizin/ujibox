@@ -70,6 +70,12 @@ build = [
   'xcodebuild -project ios/Shop.xcodeproj -scheme Shop -configuration Debug -destination "generic/platform=iOS Simulator" -derivedDataPath "{derived_data}" build',
 ]
 artifact = "{derived_data}/Build/Products/Debug-iphonesimulator/Shop.app"
+
+[apps.shop.ios.device]
+build = [
+  'xcodebuild -project ios/Shop.xcodeproj -scheme Shop -configuration Debug -destination "generic/platform=iOS" -derivedDataPath "{derived_data}" -allowProvisioningUpdates build',
+]
+artifact = "{derived_data}/Build/Products/Debug-iphoneos/Shop.app"
 ```
 
 ### Top-level keys
@@ -89,7 +95,8 @@ artifact = "{derived_data}/Build/Products/Debug-iphonesimulator/Shop.app"
 | `env` | Environment variables for every step of the app |
 | `setup`, `clean`, `retry` | Steps for both platforms. See below |
 | `[apps.<key>.android]` | How to build the Android app |
-| `[apps.<key>.ios]` | How to build the iOS app |
+| `[apps.<key>.ios]` | How to build the iOS app for simulators |
+| `[apps.<key>.ios.device]` | How to build the iOS app for physical devices. See [Device builds](#device-builds) |
 
 ### Platform keys
 
@@ -103,6 +110,28 @@ artifact = "{derived_data}/Build/Products/Debug-iphonesimulator/Shop.app"
 
 After the build, uji reads the real application id and version from the
 artifact. Thus the `id` field can omit flavor and build-type suffixes.
+
+### Device builds
+
+A physical iPhone or iPad needs a build for the `iphoneos` SDK, with code
+signing. The `[apps.<key>.ios.device]` table holds this build:
+
+| Key | Meaning |
+|---|---|
+| `build` | The commands that make the signed `.app` |
+| `artifact` | A glob that finds the `.app`, usually in `Debug-iphoneos` |
+| `env` | Environment variables that add to the `env` of the iOS platform |
+
+The device build uses the `id`, `setup`, `clean` and `retry` of the iOS
+platform. `uji config project` writes this table for each Xcode project.
+
+The signing settings come from the Xcode project. If the project has no
+team, add `DEVELOPMENT_TEAM=<team id>` to the `xcodebuild` line. With
+`-allowProvisioningUpdates`, Xcode creates or updates the provisioning
+profile. A signed build installs only on the devices in its profile.
+
+uji keeps device builds apart from simulator builds. `uji builds` shows them
+as `ios device`.
 
 ## Variables
 

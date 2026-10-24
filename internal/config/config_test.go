@@ -137,3 +137,41 @@ func TestSetAutoSync(t *testing.T) {
 		t.Fatal("auto-sync must be on again")
 	}
 }
+
+func TestDeviceBuild(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "p.toml")
+	write(t, f, `name = "shop"
+[apps.shop.ios]
+id = "com.example.shop"
+build = ["xcodebuild simulator"]
+artifact = "sim/*.app"
+env = { A = "1", B = "1" }
+
+[apps.shop.ios.device]
+build = ["xcodebuild device"]
+artifact = "device/*.app"
+env = { B = "2" }
+`)
+	p, err := LoadProjectFile(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ios := p.Apps["shop"].IOS
+	dev, err := ios.ForDevice()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dev.Build[0] != "xcodebuild device" || dev.Artifact != "device/*.app" || dev.ID != "com.example.shop" {
+		t.Errorf("device platform = %+v", dev)
+	}
+	if dev.Env["A"] != "1" || dev.Env["B"] != "2" {
+		t.Errorf("env = %v", dev.Env)
+	}
+	if ios.Build[0] != "xcodebuild simulator" || ios.Env["B"] != "1" {
+		t.Errorf("ForDevice changed the simulator platform: %+v", ios)
+	}
+	ios.Device = nil
+	if _, err := ios.ForDevice(); err == nil {
+		t.Error("want an error without a device build")
+	}
+}

@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,5 +63,30 @@ func TestSummarizeScriptPhase(t *testing.T) {
 	got := Summarize(log)
 	if !strings.Contains(got, "out of sync") || !strings.Contains(got, "missing a") || strings.Contains(got, "/bin/sh") {
 		t.Fatalf("Summarize = %q", got)
+	}
+}
+
+func TestInspectAppTarget(t *testing.T) {
+	app := filepath.Join(t.TempDir(), "Shop.app")
+	if err := os.MkdirAll(app, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	plist := `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.example.shop</string>
+<key>CFBundleShortVersionString</key><string>1.2</string>
+<key>CFBundleVersion</key><string>7</string>
+<key>DTPlatformName</key><string>iphoneos</string>
+</dict></plist>`
+	if err := os.WriteFile(filepath.Join(app, "Info.plist"), []byte(plist), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, _, err := Inspect(ctx, "ios", "simulator", app, ""); err == nil || !strings.Contains(err.Error(), "iphoneos") {
+		t.Errorf("a device build must not pass as a simulator build: %v", err)
+	}
+	id, v, err := Inspect(ctx, "ios", "device", app, "")
+	if err != nil || id != "com.example.shop" || v.Name != "1.2" || v.Code != "7" {
+		t.Errorf("device inspect = %q %+v %v", id, v, err)
 	}
 }

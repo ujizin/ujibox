@@ -20,14 +20,14 @@ func cmdSync(get func() *app) *cobra.Command {
 	c := &cobra.Command{
 		Use:   "sync [android|ios|device...]",
 		Short: "Copy the stored builds into the ujibox app on devices",
-		Long: `Copy every stored build of a device's platform into the ujibox app on that
-device: APKs to Android devices, .app bundles to iOS simulators. The device
-then holds exactly the builds in the store; builds that left the store are
-removed from it.
+		Long: `Copy the stored builds into the ujibox app on each device: APKs to Android
+devices, simulator builds to iOS simulators, and the list of device builds
+to physical iPhones. The device then holds exactly the builds in the store;
+builds that left the store are removed from it.
 
 On Android, the ujibox app installs a build itself. iOS does not let an app
-install other apps, so on a simulator the ujibox app lists the builds and
-copies the command that installs one; run that command in a Mac terminal.`,
+install other apps, so on iOS the ujibox app lists the builds and copies the
+command that installs one; run that command in a Mac terminal.`,
 		Example: `  uji sync
   uji sync android
   uji sync "Galaxy S24"`,
@@ -48,10 +48,10 @@ copies the command that installs one; run that command in a Mac terminal.`,
 					break
 				}
 			}
-			builds, unlock := a.syncBuilds(devicePlatforms(devs), appID)
+			builds, unlock := a.syncBuilds(deviceTargets(devs), appID)
 			defer unlock()
 			return forEach(devs, func(d device.Device) (string, error) {
-				r, err := syncer.Sync(a.ctx, a.mgr, a.global, d, builds[d.Platform])
+				r, err := syncer.Sync(a.ctx, a.mgr, a.global, d, builds[d.Target()])
 				if err != nil {
 					return "", err
 				}
@@ -64,14 +64,14 @@ copies the command that installs one; run that command in a Mac terminal.`,
 	return c
 }
 
-// syncBuilds lists the stored builds of each platform and holds them, so
-// prune cannot remove one during the copy. Call unlock after the sync.
-func (a *app) syncBuilds(platforms []string, appID string) (map[string][]*store.Manifest, func()) {
+// syncBuilds lists the stored builds of each target and holds them, so prune
+// cannot remove one during the copy. Call unlock after the sync.
+func (a *app) syncBuilds(targets []string, appID string) (map[string][]*store.Manifest, func()) {
 	builds := map[string][]*store.Manifest{}
 	var locks []interface{ Unlock() }
-	for _, p := range platforms {
-		builds[p] = a.store.List(store.Filter{AppID: appID, Platform: p})
-		for _, m := range builds[p] {
+	for _, t := range targets {
+		builds[t] = a.store.List(store.Filter{AppID: appID, Platform: device.TargetPlatform(t), Target: t})
+		for _, m := range builds[t] {
 			if l := a.store.Use(m); l != nil {
 				locks = append(locks, l)
 			}
@@ -94,17 +94,17 @@ func (a *app) autoSync(platforms ...string) {
 	devs, _ := a.mgr.List(a.ctx, platforms)
 	var ready []device.Device
 	for _, d := range devs {
-		if d.Ready() {
+		if d.Default() {
 			ready = append(ready, d)
 		}
 	}
 	if len(ready) == 0 {
 		return
 	}
-	builds, unlock := a.syncBuilds(devicePlatforms(ready), "")
+	builds, unlock := a.syncBuilds(deviceTargets(ready), "")
 	defer unlock()
 	for _, d := range ready {
-		r, err := syncer.Sync(a.ctx, a.mgr, a.global, d, builds[d.Platform])
+		r, err := syncer.Sync(a.ctx, a.mgr, a.global, d, builds[d.Target()])
 		switch {
 		case errors.Is(err, syncer.ErrNoApp):
 			continue

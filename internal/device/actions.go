@@ -8,7 +8,7 @@ import (
 	"github.com/ujizin/ujibox/internal/config"
 )
 
-// Install puts an artifact (APK or simulator .app) on a device.
+// Install puts an artifact (an APK, or a simulator or device .app) on a device.
 func (m *Manager) Install(ctx context.Context, d Device, artifact string) error {
 	switch d.Platform {
 	case config.Android:
@@ -41,13 +41,14 @@ func (m *Manager) Uninstall(ctx context.Context, d Device, id string) error {
 	return fmt.Errorf("unknown platform %q", d.Platform)
 }
 
-// OpenURL opens a deeplink or a web link on a device.
-func (m *Manager) OpenURL(ctx context.Context, d Device, url string) error {
+// OpenURL opens a deeplink or a web link on a device. A physical iOS device
+// opens the URL in the app with bundleID, or in Safari when it is empty.
+func (m *Manager) OpenURL(ctx context.Context, d Device, url, bundleID string) error {
 	switch d.Platform {
 	case config.Android:
 		return m.openURLAndroid(ctx, d, url)
 	case config.IOS:
-		return m.openURLIOS(ctx, d, url)
+		return m.openURLIOS(ctx, d, url, bundleID)
 	}
 	return fmt.Errorf("unknown platform %q", d.Platform)
 }

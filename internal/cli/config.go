@@ -148,6 +148,13 @@ and retry rules are yours to change.`,
 					for _, r := range append(append([]config.Retry{}, ap.Retry...), pl.Retry...) {
 						fmt.Printf("    retry     /%s/ → %s\n", r.Match, v.Expand(r.Then))
 					}
+					if dev, err := pl.ForDevice(); err == nil {
+						fmt.Printf("  %s\n", "ios device")
+						for _, b := range dev.Build {
+							fmt.Printf("    build     %s\n", v.Expand(b))
+						}
+						fmt.Printf("    artifact  %s\n", v.Expand(dev.Artifact))
+					}
 				}
 			}
 			return nil

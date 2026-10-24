@@ -62,7 +62,12 @@ func cmdDevices(get func() *app) *cobra.Command {
 			}
 			rows := make([][]string, 0, len(devs))
 			for _, d := range devs {
-				rows = append(rows, []string{d.Platform, deviceName(d), stateText(d.State), d.Kind, d.OS, ui.Dim(d.ID)})
+				kind := d.Kind
+				if d.Wireless {
+					// Commands use it only when it is named; see Device.Default.
+					kind += " (network)"
+				}
+				rows = append(rows, []string{d.Platform, deviceName(d), stateText(d.State), kind, d.OS, ui.Dim(d.ID)})
 			}
 			ui.Table(os.Stdout, []string{"PLATFORM", "NAME", "STATE", "KIND", "OS", "ID"}, rows)
 			return nil

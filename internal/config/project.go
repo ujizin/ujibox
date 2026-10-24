@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -72,10 +73,41 @@ type Platform struct {
 	Setup    []Step            `toml:"setup,omitempty"`
 	Clean    []Step            `toml:"clean,omitempty"`
 	Retry    []Retry           `toml:"retry,omitempty"`
+	// Device builds the iOS app for physical devices. It is iOS only.
+	Device *DeviceBuild `toml:"device,omitempty"`
 
 	// gradleRoot is the directory of the Gradle settings file, relative to
 	// the checkout root. Only detection sets it.
 	gradleRoot string
+}
+
+// DeviceBuild is the build of an iOS app for physical devices. It needs code
+// signing. The setup, clean and retry steps and the id come from the iOS
+// platform; Env adds to its env.
+type DeviceBuild struct {
+	Build    []string          `toml:"build"`
+	Artifact string            `toml:"artifact"`
+	Env      map[string]string `toml:"env,omitempty"`
+}
+
+// ForDevice returns the platform with the device build in place of the
+// simulator build.
+func (p *Platform) ForDevice() (*Platform, error) {
+	if p.Device == nil || len(p.Device.Build) == 0 {
+		return nil, errors.New("this app has no iOS device build; add [apps.<app>.ios.device] to the project file (`uji config edit`)")
+	}
+	out := *p
+	out.Build = p.Device.Build
+	out.Artifact = p.Device.Artifact
+	out.Env = map[string]string{}
+	for k, v := range p.Env {
+		out.Env[k] = v
+	}
+	for k, v := range p.Device.Env {
+		out.Env[k] = v
+	}
+	out.Device = nil
+	return &out, nil
 }
 
 // Step is one shell command. If Creates is set and that path exists, the step

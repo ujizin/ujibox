@@ -31,9 +31,13 @@ uji                    # the interactive screen
 | Android emulator | yes | yes | yes | yes | yes |
 | Android device | yes | yes | yes | yes | yes |
 | iOS simulator | yes | yes | yes | yes | yes |
-| iOS device | no | no | no | no | no |
+| iOS device | yes¹ | yes | yes | yes² | yes² |
 
-The host is macOS. Physical iOS devices are not supported.
+¹ A build for a physical iPhone needs code signing.
+
+² Screenshots and recording on a physical iPhone need Xcode 27 or later.
+
+The host is macOS.
 
 ## Install
 

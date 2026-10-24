@@ -128,12 +128,15 @@ func fileSHA256(p string) (string, error) {
 type Filter struct {
 	AppID    string
 	Platform string
-	Group    string
+	// Target is "emulator", "simulator" or "device"; see the device package.
+	Target string
+	Group  string
 }
 
 func (f Filter) match(m *Manifest) bool {
 	return (f.AppID == "" || m.App.ID == f.AppID) &&
 		(f.Platform == "" || m.Platform == f.Platform) &&
+		(f.Target == "" || m.Target == f.Target) &&
 		(f.Group == "" || m.Group() == f.Group)
 }
 
@@ -284,7 +287,7 @@ func (s *Store) Prune(p Policy, now time.Time, dryRun bool) (removed []*Manifest
 
 	seen := map[string]int{}
 	for _, m := range s.List(Filter{}) { // newest first
-		key := m.App.ID + "\x00" + m.Platform + "\x00" + m.Group()
+		key := m.App.ID + "\x00" + m.Platform + "\x00" + m.Target + "\x00" + m.Group()
 		seen[key]++
 		if m.Pinned || seen[key] <= p.KeepLast || now.Sub(m.CreatedAt) < p.MaxAge {
 			continue
