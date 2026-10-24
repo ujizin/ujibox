@@ -37,10 +37,26 @@ The host is macOS. Physical iOS devices are not supported.
 
 ## Install
 
-```sh
-go install github.com/ujizin/ujibox/cmd/uji@latest
-uji doctor
-```
+1. Install [Go](https://go.dev/dl/) 1.26 or later (`brew install go`).
+2. Install uji:
+
+    ```sh
+    go install github.com/ujizin/ujibox/cmd/uji@latest
+    ```
+
+3. Add the Go bin folder to your `PATH`, so the shell finds `uji`. Skip
+   this step if `which uji` already prints a path.
+
+    ```sh
+    echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc
+    source ~/.zshrc
+    ```
+
+4. Check the tools:
+
+    ```sh
+    uji doctor
+    ```
 
 - Android needs the Android SDK.
 - iOS needs Xcode.

@@ -12,15 +12,26 @@
 
 ## Install
 
-```sh
-go install github.com/ujizin/ujibox/cmd/uji@latest
-```
+1. Install Go 1.26 or later (`brew install go`).
+2. Install uji:
 
-Check the tools:
+    ```sh
+    go install github.com/ujizin/ujibox/cmd/uji@latest
+    ```
 
-```sh
-uji doctor
-```
+3. Add the Go bin folder to your `PATH`, so the shell finds `uji`. Skip
+   this step if `which uji` already prints a path.
+
+    ```sh
+    echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc
+    source ~/.zshrc
+    ```
+
+4. Check the tools:
+
+    ```sh
+    uji doctor
+    ```
 
 ## First build
 
