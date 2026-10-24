@@ -382,10 +382,10 @@ func (a *app) appID(appKey, platform string) (string, error) {
 }
 
 func projectFileText(p *config.Project) string {
-	if p.File == "" {
+	if p.EditFile() == "" {
 		return "a project file (`uji config project`)"
 	}
-	return paths.Pretty(p.File)
+	return paths.Pretty(p.EditFile())
 }
 
 func appCommand(get func() *app, use, short, verb string, fn func(a *app, d device.Device, id string) error) *cobra.Command {

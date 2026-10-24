@@ -63,7 +63,9 @@
 !!! note
     A simple project builds without a project file. uji then detects the
     Gradle application module and the Xcode project each time it runs.
-    `uji config project` saves the result, so you can edit it.
+    `uji config project` saves the result, so you can edit it. To share the
+    config with your team, run `uji config project --repo` and commit
+    `.ujibox.toml`.
 
 ## Daily use
 

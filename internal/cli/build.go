@@ -98,8 +98,13 @@ signed build for physical devices.`,
 
 func announce(g gitinfo.Info, p *config.Project, ap *config.App) {
 	src := "project " + p.Name
-	if p.Detected {
+	switch {
+	case p.Detected:
 		src = "detected project (no project file; `uji config project` writes one)"
+	case p.RepoFile != "" && p.File != "":
+		src += " (" + config.RepoFileName + " + this machine)"
+	case p.RepoFile != "":
+		src += " (" + config.RepoFileName + ")"
 	}
 	dirty := ""
 	if g.Dirty {

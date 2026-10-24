@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ujizin/ujibox/internal/gitinfo"
+	"github.com/ujizin/ujibox/internal/paths"
 )
 
 func write(t *testing.T, p, s string) {
@@ -173,5 +174,112 @@ env = { B = "2" }
 	ios.Device = nil
 	if _, err := ios.ForDevice(); err == nil {
 		t.Error("want an error without a device build")
+	}
+}
+
+func TestRepoFileAndOverride(t *testing.T) {
+	t.Setenv("UJIBOX_CONFIG", t.TempDir())
+	root := t.TempDir()
+	g := gitinfo.Info{Root: root, MainRoot: root, Remote: "github.com/example/shop"}
+	write(t, filepath.Join(root, RepoFileName), `name = "shop"
+default_app = "shop"
+
+[apps.shop]
+display = "Shop"
+env = { A = "repo", B = "repo" }
+
+[apps.shop.android]
+build = ["./gradlew :app:assembleDebug"]
+artifact = "app/build/outputs/apk/debug/*.apk"
+
+[apps.shop.ios]
+build = ["xcodebuild simulator"]
+artifact = "sim/*.app"
+
+[apps.shop.ios.device]
+build = ["xcodebuild device"]
+artifact = "device/*.app"
+`)
+
+	// Only the repo file.
+	p, errs := Find(g)
+	if len(errs) > 0 || p == nil || p.Detected {
+		t.Fatalf("repo file: %+v %v", p, errs)
+	}
+	if p.RepoFile == "" || p.File != "" || p.Name != "shop" || p.EditFile() != filepath.Join(root, RepoFileName) {
+		t.Errorf("repo project = %+v", p)
+	}
+
+	// A machine file overrides some keys and adds an app.
+	write(t, filepath.Join(paths.Projects(), "shop.toml"), `[match]
+remote = "github.com/example/shop"
+
+[apps.shop]
+env = { B = "machine" }
+
+[apps.shop.ios.device]
+build = ["xcodebuild device DEVELOPMENT_TEAM=ABC"]
+
+[apps.admin.android]
+build = ["./gradlew :admin:assembleDebug"]
+artifact = "admin/*.apk"
+`)
+	p, errs = Find(g)
+	if len(errs) > 0 || p == nil {
+		t.Fatalf("merged: %+v %v", p, errs)
+	}
+	shop := p.Apps["shop"]
+	if shop.Env["A"] != "repo" || shop.Env["B"] != "machine" || shop.Display != "Shop" {
+		t.Errorf("app env/display = %v %q", shop.Env, shop.Display)
+	}
+	if shop.Android.Build[0] != "./gradlew :app:assembleDebug" {
+		t.Errorf("android build = %v", shop.Android.Build)
+	}
+	if d := shop.IOS.Device; d.Build[0] != "xcodebuild device DEVELOPMENT_TEAM=ABC" || d.Artifact != "device/*.app" {
+		t.Errorf("device = %+v", d)
+	}
+	if p.Apps["admin"] == nil || p.DefaultApp != "shop" || p.Name != "shop" {
+		t.Errorf("merged project = %+v", p)
+	}
+	if p.EditFile() != filepath.Join(paths.Projects(), "shop.toml") || p.RepoFile == "" {
+		t.Errorf("files: %q %q", p.File, p.RepoFile)
+	}
+
+	// The override must not change the repo values that it leaves out.
+	repo, _ := LoadRepoFile(g)
+	if repo.Apps["shop"].Env["B"] != "repo" || repo.Apps["shop"].IOS.Device.Build[0] != "xcodebuild device" {
+		t.Errorf("repo file changed: %+v", repo.Apps["shop"])
+	}
+
+	// A broken machine file falls back to the repo file, with an error.
+	write(t, filepath.Join(paths.Projects(), "shop.toml"), `[match]
+remote = "github.com/example/shop"
+
+[apps.extra.android]
+build = ["x"]
+`)
+	p, errs = Find(g)
+	if len(errs) != 1 || p == nil || p.File != "" {
+		t.Errorf("broken override: %+v %v", p, errs)
+	}
+}
+
+func TestRenderRepoAndOverride(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "app/build.gradle.kts"), `plugins { id("com.android.application") }
+android { defaultConfig { applicationId = "com.example.shop" } }`)
+	d := detectAll(gitinfo.Info{Root: root, MainRoot: root, Remote: "github.com/example/shop"}, false)
+	text := d.RenderRepo()
+	if strings.Contains(text, "[match]") || strings.Contains(text, root) {
+		t.Errorf("a repo file must not hold a match table or a local path:\n%s", text)
+	}
+	f := filepath.Join(t.TempDir(), RepoFileName)
+	write(t, f, text)
+	if _, err := LoadProjectFile(f); err != nil {
+		t.Fatalf("rendered repo file does not load: %v\n%s", err, text)
+	}
+	over := RenderOverride(d.Project, Match{Remote: "github.com/example/shop"})
+	if !strings.Contains(over, `remote = "github.com/example/shop"`) || strings.Contains(over, "\nbuild =") {
+		t.Errorf("override:\n%s", over)
 	}
 }

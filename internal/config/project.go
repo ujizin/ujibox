@@ -30,8 +30,11 @@ type Project struct {
 	DefaultApp string          `toml:"default_app,omitempty"`
 	Apps       map[string]*App `toml:"apps"`
 
-	// File is the path the project came from. It is empty for a detected project.
+	// File is the project file on this machine. It is empty for a detected
+	// project, and for a project that only the repo file defines.
 	File string `toml:"-"`
+	// RepoFile is the .ujibox.toml of the checkout, when it has one.
+	RepoFile string `toml:"-"`
 	// Detected is true when no file matched and ujibox guessed the config.
 	Detected bool `toml:"-"`
 }
@@ -200,19 +203,35 @@ func (p *Project) App(key string) (*App, error) {
 }
 
 func (p *Project) where() string {
-	if p.File == "" {
-		return "a project file (run `uji config project`)"
+	switch {
+	case p.File != "":
+		return paths.Pretty(p.File)
+	case p.RepoFile != "":
+		return paths.Pretty(p.RepoFile)
 	}
-	return paths.Pretty(p.File)
+	return "a project file (run `uji config project`)"
+}
+
+// EditFile is the file to edit for this project: the machine file, or the
+// repo file when there is no machine file.
+func (p *Project) EditFile() string {
+	if p.File != "" {
+		return p.File
+	}
+	return p.RepoFile
 }
 
 // LoadProjects reads every project file. A broken file is skipped and
 // reported in errs, so one bad file does not stop the others.
+//
+// A machine file can override the repo file of a checkout, so it can lack
+// keys that a complete file needs. LoadProjects does not check for them; Find
+// checks the project that it returns.
 func LoadProjects() (projects []*Project, errs []error) {
 	files, _ := filepath.Glob(filepath.Join(paths.Projects(), "*.toml"))
 	sort.Strings(files)
 	for _, f := range files {
-		p, err := LoadProjectFile(f)
+		p, err := decodeProjectFile(f)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -224,6 +243,19 @@ func LoadProjects() (projects []*Project, errs []error) {
 
 // LoadProjectFile reads one project file.
 func LoadProjectFile(file string) (*Project, error) {
+	p, err := decodeProjectFile(file)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.normalize(); err != nil {
+		return nil, fmt.Errorf("%s: %w", paths.Pretty(file), err)
+	}
+	return p, nil
+}
+
+// decodeProjectFile reads a project file and rejects unknown keys. It does
+// not check that the file is complete.
+func decodeProjectFile(file string) (*Project, error) {
 	p := &Project{}
 	md, err := toml.DecodeFile(file, p)
 	if err != nil {
@@ -239,9 +271,6 @@ func LoadProjectFile(file string) (*Project, error) {
 	p.File = file
 	if p.Name == "" {
 		p.Name = strings.TrimSuffix(filepath.Base(file), ".toml")
-	}
-	if err := p.normalize(); err != nil {
-		return nil, fmt.Errorf("%s: %w", paths.Pretty(file), err)
 	}
 	return p, nil
 }
@@ -298,11 +327,39 @@ func (p *Project) Matches(g gitinfo.Info) bool {
 // Find returns the project for a checkout: the first file that matches, or a
 // detected project. It returns nil when nothing matches and detection finds
 // nothing to build.
+//
+// The order is:
+//  1. A machine file that matches the checkout. If the checkout also has a
+//     .ujibox.toml, the machine file overrides it key by key.
+//  2. The .ujibox.toml of the checkout.
+//  3. Detection.
+//
+// A broken file is an error in errs, and Find goes on with the next source.
 func Find(g gitinfo.Info) (*Project, []error) {
 	projects, errs := LoadProjects()
-	for _, p := range projects {
-		if p.Matches(g) {
-			return p, errs
+	repo, err := LoadRepoFile(g)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	for _, local := range projects {
+		if !local.Matches(g) {
+			continue
+		}
+		p := local
+		if repo != nil {
+			p = Merge(repo, local)
+		}
+		if err := p.normalize(); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", p.where(), err))
+			break
+		}
+		return p, errs
+	}
+	if repo != nil {
+		if err := repo.normalize(); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", paths.Pretty(repo.RepoFile), err))
+		} else {
+			return repo, errs
 		}
 	}
 	if p := Detect(g); p != nil {

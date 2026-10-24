@@ -1,8 +1,10 @@
 # Project files
 
-A project file tells uji how to build the apps of a repository. Each file is
-on your machine only, in `~/.config/ujibox/projects/<name>.toml`. uji does
-not add files to your repository.
+A project file tells uji how to build the apps of a repository. By default,
+the file is on your machine only, in `~/.config/ujibox/projects/<name>.toml`.
+
+A repository can also share its project file with everyone who clones it.
+See [Share the config in the repository](#share-the-config-in-the-repository).
 
 ## Make a project file
 
@@ -33,9 +35,68 @@ uji config show
 
 `uji config show` prints the result with the variables filled in.
 
+## Share the config in the repository
+
+Write the project file into the repository instead of your machine:
+
+```sh
+uji config project --repo
+```
+
+uji writes `.ujibox.toml` in the root of the checkout. Read it, correct it,
+then commit it. Everyone who clones the repository then builds with the same
+config, with no setup.
+
+`.ujibox.toml` has the same format as a project file on your machine, but no
+`[match]` table: it applies to the checkout that holds it. Each branch and
+worktree reads its own copy, so a branch can change the build.
+
+!!! warning
+    Read the `.ujibox.toml` of a repository before you build it. Like
+    `./gradlew` or an Xcode build script, its commands run on your machine.
+
+### Override the repository file on your machine
+
+A project file on your machine overrides the `.ujibox.toml` of the checkout.
+Set in it only the keys that differ on your machine. If the checkout has a
+`.ujibox.toml`, `uji config project` writes a small file for this:
+
+```sh
+uji config project
+uji config edit
+```
+
+```toml
+[match]
+remote = "github.com/example/shop"
+
+[apps.shop]
+env = { JAVA_HOME = "/Library/Java/JavaVirtualMachines/jdk-21/Contents/Home" }
+
+[apps.shop.ios.device]
+build = ['xcodebuild -project ios/Shop.xcodeproj -scheme Shop -destination "generic/platform=iOS" -derivedDataPath "{derived_data}" DEVELOPMENT_TEAM=ABCDE12345 build']
+```
+
+uji merges the two files:
+
+- A key that your file sets wins, in an app, a platform or a device table.
+- `env` tables merge key by key.
+- An app that only your file has is added.
+- A key that your file does not set keeps its value from `.ujibox.toml`.
+
+`uji config show` prints the result and both files. `uji config edit` opens
+the file on your machine, and `uji config edit repo` opens `.ujibox.toml`.
+
 ## How uji finds the file
 
-A project file has a `[match]` table. uji compares it with the checkout of
+uji takes the config of a checkout from the first of these that exists:
+
+1. A project file on your machine that matches the checkout. If the checkout
+   also has a `.ujibox.toml`, the file on your machine overrides it.
+2. The `.ujibox.toml` of the checkout.
+3. Detection: uji looks at the checkout each time it runs.
+
+A project file on your machine has a `[match]` table. uji compares it with the checkout of
 the working directory:
 
 - `remote`: the `origin` remote. uji compares remotes in one form, so
@@ -45,7 +106,8 @@ the working directory:
 Every worktree of a repository has the same `origin`. Thus one file serves
 all worktrees.
 
-If no file matches, uji detects the project each time it runs.
+If a file is broken, uji shows the error and goes to the next item of the
+list.
 
 ## Format
 

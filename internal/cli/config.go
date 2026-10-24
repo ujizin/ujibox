@@ -12,6 +12,7 @@ import (
 
 	"github.com/ujizin/ujibox/internal/config"
 	"github.com/ujizin/ujibox/internal/device"
+	"github.com/ujizin/ujibox/internal/gitinfo"
 	"github.com/ujizin/ujibox/internal/paths"
 	"github.com/ujizin/ujibox/internal/ui"
 )
@@ -24,18 +25,31 @@ func cmdConfig(get func() *app) *cobra.Command {
 only. A file matches a checkout by its git remote or by path, so every
 worktree of a repo uses the same file.
 
+A repo can also share its config in ` + config.RepoFileName + ` at the root of the checkout.
+A project file on this machine overrides its keys.
+
 The global config is ` + paths.Pretty(config.GlobalPath()) + `.`,
 		GroupID: "store",
 	}
 
-	var force, print bool
+	var force, print, repo bool
 	project := &cobra.Command{
 		Use:   "project",
 		Short: "Detect the project of this checkout and write its project file",
 		Long: `Look at the checkout for Gradle application modules and Xcode projects,
 then write a project file with what uji found. Each value has a comment that
 says where it came from. Edit the file after: build commands, setup steps
-and retry rules are yours to change.`,
+and retry rules are yours to change.
+
+By default the file goes to ` + paths.Pretty(paths.Projects()) + `, on this machine only.
+With --repo, uji writes ` + config.RepoFileName + ` in the root of the checkout; commit it to
+share the config with everyone who clones the repo.
+
+If the checkout already has ` + config.RepoFileName + `, uji writes a small file for this
+machine that overrides only the keys you set in it.`,
+		Example: `  uji config project
+  uji config project --repo
+  uji config project --print`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a := get()
@@ -43,21 +57,36 @@ and retry rules are yours to change.`,
 			if err != nil {
 				return err
 			}
+			shared, err := config.LoadRepoFile(g)
+			if err != nil && !repo {
+				return err
+			}
+			if shared != nil && !repo && !print {
+				return writeOverride(g, shared, force)
+			}
+
 			ui.Info(os.Stderr, "looking at %s…", paths.Pretty(g.Root))
 			det := config.DetectVerbose(g)
 			if det == nil {
 				return errors.New("found no Gradle application module and no Xcode project; write the file by hand (see `uji help config`)")
 			}
 			text := det.Render()
+			if repo {
+				text = det.RenderRepo()
+			}
 			if print {
 				fmt.Print(text)
 				return nil
 			}
 			file := filepath.Join(paths.Projects(), det.Project.Name+".toml")
-			projects, _ := config.LoadProjects()
-			for _, p := range projects {
-				if p.Matches(g) && p.File != file {
-					file = p.File
+			if repo {
+				file = config.RepoFilePath(g)
+			} else {
+				projects, _ := config.LoadProjects()
+				for _, p := range projects {
+					if p.Matches(g) && p.File != file {
+						file = p.File
+					}
 				}
 			}
 			if _, err := os.Stat(file); err == nil && !force {
@@ -77,31 +106,48 @@ and retry rules are yours to change.`,
 				ap := det.Project.Apps[k]
 				ui.Info(os.Stdout, "app %s: %s", ui.Bold(ap.Name()), strings.Join(ap.Platforms(), ", "))
 			}
-			fmt.Println(ui.Dim("Check the build commands, then run `uji build`. `uji config edit` opens the file."))
+			if repo {
+				fmt.Println(ui.Dim("Check the build commands, then commit " + config.RepoFileName + " to share it."))
+			} else {
+				fmt.Println(ui.Dim("Check the build commands, then run `uji build`. `uji config edit` opens the file."))
+			}
 			return nil
 		},
 	}
 	project.Flags().BoolVarP(&force, "force", "f", false, "replace an existing project file")
 	project.Flags().BoolVar(&print, "print", false, "print the file instead of writing it")
+	project.Flags().BoolVar(&repo, "repo", false, "write "+config.RepoFileName+" in the checkout, to share it in the repo")
 
 	edit := &cobra.Command{
-		Use:   "edit [global]",
-		Short: "Open the project file of this checkout, or the global config, in $EDITOR",
-		Args:  cobra.MaximumNArgs(1),
+		Use:   "edit [global|repo]",
+		Short: "Open the project file of this checkout, the repo file, or the global config, in $EDITOR",
+		Long: `With no argument, open the project file of this checkout: the file on this
+machine, or ` + config.RepoFileName + ` when there is no file on this machine.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a := get()
 			file := config.GlobalPath()
-			if len(args) == 0 {
+			switch {
+			case len(args) == 0:
 				_, p, _, err := a.project("")
 				if p == nil {
 					return err
 				}
-				if p.File == "" {
+				if p.EditFile() == "" {
 					return errors.New("no project file matches this checkout; run `uji config project` first")
 				}
-				file = p.File
-			} else if args[0] != "global" {
-				return fmt.Errorf("unknown target %q; use `uji config edit` or `uji config edit global`", args[0])
+				file = p.EditFile()
+			case args[0] == "repo":
+				g, err := a.checkout()
+				if err != nil {
+					return err
+				}
+				file = config.RepoFilePath(g)
+				if _, err := os.Stat(file); err != nil {
+					return fmt.Errorf("this checkout has no %s; run `uji config project --repo` first", config.RepoFileName)
+				}
+			case args[0] != "global":
+				return fmt.Errorf("unknown target %q; use `uji config edit`, `uji config edit repo` or `uji config edit global`", args[0])
 			}
 			return openEditor(file)
 		},
@@ -117,10 +163,7 @@ and retry rules are yours to change.`,
 			if p == nil {
 				return err
 			}
-			src := paths.Pretty(p.File)
-			if p.Detected {
-				src = "detected (no project file)"
-			}
+			src := p.Sources()
 			fmt.Printf("%s %s\n%s %s\n%s %s @ %s\n", ui.Dim("project "), p.Name, ui.Dim("source  "), src,
 				ui.Dim("checkout"), paths.Pretty(g.Root), g.Group())
 			for _, k := range p.AppKeys() {
@@ -162,22 +205,30 @@ and retry rules are yours to change.`,
 	}
 
 	path := &cobra.Command{
-		Use:   "path [global]",
-		Short: "Print the path of the project file of this checkout, or of the global config",
+		Use:   "path [global|repo]",
+		Short: "Print the path of the project file of this checkout, the repo file, or the global config",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 1 && args[0] == "global" {
 				fmt.Println(config.GlobalPath())
 				return nil
 			}
+			if len(args) == 1 && args[0] == "repo" {
+				g, err := get().checkout()
+				if err != nil {
+					return err
+				}
+				fmt.Println(config.RepoFilePath(g))
+				return nil
+			}
 			_, p, _, err := get().project("")
 			if p == nil {
 				return err
 			}
-			if p.File == "" {
+			if p.EditFile() == "" {
 				return errors.New("no project file matches this checkout; run `uji config project`")
 			}
-			fmt.Println(p.File)
+			fmt.Println(p.EditFile())
 			return nil
 		},
 	}
@@ -253,6 +304,35 @@ one command.`,
 
 	c.AddCommand(project, edit, show, path, alias, autoSync)
 	return c
+}
+
+// writeOverride writes a machine file that overrides the repo file of the
+// checkout. It has only a [match] table and commented examples.
+func writeOverride(g gitinfo.Info, shared *config.Project, force bool) error {
+	m := config.Match{Remote: g.Remote}
+	if g.Remote == "" {
+		m.Paths = []string{g.MainRoot}
+	}
+	file := filepath.Join(paths.Projects(), shared.Name+".toml")
+	projects, _ := config.LoadProjects()
+	for _, p := range projects {
+		if p.Matches(g) {
+			file = p.File
+		}
+	}
+	if _, err := os.Stat(file); err == nil && !force {
+		return fmt.Errorf("%s exists and overrides %s; edit it with `uji config edit`, or pass --force to replace it",
+			paths.Pretty(file), config.RepoFileName)
+	}
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(file, []byte(config.RenderOverride(shared, m)), 0o644); err != nil {
+		return err
+	}
+	ui.OK(os.Stdout, "wrote %s", paths.Pretty(file))
+	fmt.Println(ui.Dim("This checkout shares its config in " + config.RepoFileName + ". The new file is for this machine:\nset in it only the keys that differ here. Use --repo to write " + config.RepoFileName + " again."))
+	return nil
 }
 
 func openEditor(file string) error {

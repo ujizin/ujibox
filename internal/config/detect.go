@@ -505,10 +505,22 @@ func shellWord(s string) string {
 }
 
 // Render writes a detected project as a commented TOML file.
-func (d *Detection) Render() string {
+func (d *Detection) Render() string { return d.render(false) }
+
+// RenderRepo writes the project as a .ujibox.toml for the repo: it has no
+// [match] table, because the file lives in the checkout it describes.
+func (d *Detection) RenderRepo() string { return d.render(true) }
+
+func (d *Detection) render(repo bool) string {
 	p := d.Project
 	var b strings.Builder
-	b.WriteString("# ujibox project file. `uji config project` wrote it from what it found in the checkout.\n")
+	if repo {
+		b.WriteString("# ujibox project file, shared by everyone who clones this repo.\n")
+		b.WriteString("# `uji config project --repo` wrote it from what it found in the checkout.\n")
+		b.WriteString("# A project file in ~/.config/ujibox/projects overrides its keys on one machine.\n")
+	} else {
+		b.WriteString("# ujibox project file. `uji config project` wrote it from what it found in the checkout.\n")
+	}
 	b.WriteString("# Edit it freely; `uji config show` prints the result with {variables} filled in.\n")
 	b.WriteString("#\n")
 	b.WriteString("# Variables in run, build and artifact values (also exported as UJI_<NAME>):\n")
@@ -518,12 +530,8 @@ func (d *Detection) Render() string {
 	if p.DefaultApp != "" {
 		fmt.Fprintf(&b, "default_app = %q\n", p.DefaultApp)
 	}
-	b.WriteString("\n[match]\n")
-	if p.Match.Remote != "" {
-		fmt.Fprintf(&b, "remote = %q\n", p.Match.Remote)
-		b.WriteString("# paths = [\"~/code/my-repo*\"]   # match checkout roots instead of, or as well as, the remote\n")
-	} else {
-		fmt.Fprintf(&b, "paths = [%q]\n", p.Match.Paths[0])
+	if !repo {
+		writeMatch(&b, p.Match)
 	}
 
 	for _, k := range p.AppKeys() {
@@ -579,6 +587,41 @@ func (d *Detection) Render() string {
 			}
 		}
 	}
+	return b.String()
+}
+
+func writeMatch(b *strings.Builder, m Match) {
+	b.WriteString("\n[match]\n")
+	if m.Remote != "" {
+		fmt.Fprintf(b, "remote = %q\n", m.Remote)
+		b.WriteString("# paths = [\"~/code/my-repo*\"]   # match checkout roots instead of, or as well as, the remote\n")
+	} else if len(m.Paths) > 0 {
+		fmt.Fprintf(b, "paths = [%q]\n", m.Paths[0])
+	}
+}
+
+// RenderOverride writes a machine project file that overrides the repo file
+// of a checkout. It has only the [match] table and commented examples.
+func RenderOverride(repo *Project, m Match) string {
+	var b strings.Builder
+	b.WriteString("# ujibox project file for this machine only. It overrides the keys of the\n")
+	fmt.Fprintf(&b, "# shared %s of the repo: set only what differs here.\n", RepoFileName)
+	b.WriteString("# `uji config show` prints the result.\n")
+	writeMatch(&b, m)
+	key := repo.DefaultApp
+	if key == "" {
+		if keys := repo.AppKeys(); len(keys) > 0 {
+			key = keys[0]
+		}
+	}
+	if key == "" {
+		key = "<app>"
+	}
+	k := tomlKey(key)
+	b.WriteString("\n# Examples:\n")
+	fmt.Fprintf(&b, "# [apps.%s]\n# env = { JAVA_HOME = \"/path/to/jdk\" }\n#\n", k)
+	fmt.Fprintf(&b, "# [apps.%s.ios.device]\n", k)
+	b.WriteString("# build = ['xcodebuild … DEVELOPMENT_TEAM=<your team id> build']\n")
 	return b.String()
 }
 
