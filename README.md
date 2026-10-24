@@ -48,8 +48,10 @@ uji doctor
 
 ## Documentation
 
-Read the guides in [`docs/`](docs/): [get started](docs/getting-started.md),
-[commands](docs/commands.md) and [the ujibox app](docs/app.md).
+Read the docs at [ujizin.github.io/ujibox](https://ujizin.github.io/ujibox/):
+[get started](https://ujizin.github.io/ujibox/getting-started/),
+[commands](https://ujizin.github.io/ujibox/commands/) and
+[the ujibox app](https://ujizin.github.io/ujibox/app/).
 
 ## Contributing
 
