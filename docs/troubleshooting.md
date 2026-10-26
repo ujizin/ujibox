@@ -23,6 +23,10 @@ of the full log. The logs are in `~/Library/Caches/ujibox/logs`.
 :   The device build made a simulator app. Use a device destination in
     `[apps.<key>.ios.device]`: `-destination "generic/platform=iOS"`.
 
+**"has no index.html"**
+:   The web `artifact` must be the folder with `index.html`, for example
+    `webApp/build/dist/wasmJs/productionExecutable`, not a file in it.
+
 **"Signing for … requires a development team"**
 :   A device build needs code signing. Sign in to Xcode with your Apple ID
     (**Settings > Accounts**). Then set the team in the Xcode project, or add
@@ -114,3 +118,24 @@ of the full log. The logs are in `~/Library/Caches/ujibox/logs`.
 **The URL is not complete on the device**
 :   Your shell changed the URL. Put it in quotes:
     `uji deeplink "shop://a?b=1&c=2"`.
+
+## Desktop and web apps
+
+**"desktop is not a device platform"**
+:   The command works with Android and iOS devices only. Desktop and web apps
+    support `build`, `launch`, `screenshot` and `record`. See
+    [Desktop and web apps](desktop-web.md).
+
+**"no desktop app that uji launched is running"**
+:   `uji screenshot desktop` and `uji record desktop` capture only an app that
+    `uji launch desktop` started. Run `uji launch desktop` first. For a web
+    app, keep `uji launch web` running in another terminal.
+
+**"the terminal cannot capture the screen"**
+:   The terminal has no Screen Recording permission. Turn it on in System
+    Settings > Privacy & Security > Screen & System Audio Recording, then
+    quit and open the terminal again.
+
+**"the app has no window on screen"**
+:   The window is minimized, hidden, or on another desktop. Show the window
+    and run the command again.

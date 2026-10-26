@@ -35,6 +35,9 @@ func cmdDevices(get func() *app) *cobra.Command {
 			if len(sel.Names) > 0 {
 				return fmt.Errorf("unknown platform %q; use android or ios", sel.Names[0])
 			}
+			if _, host := sel.Split(); len(host) > 0 {
+				return device.NotDeviceError(host[0])
+			}
 			devs, errs := a.mgr.List(a.ctx, sel.PlatformsOr(device.AllPlatforms))
 			if !all {
 				var shown []device.Device

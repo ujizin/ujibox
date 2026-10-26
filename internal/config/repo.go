@@ -98,6 +98,8 @@ func mergeApp(r, l *App) *App {
 	}
 	out.Android = mergePlatform(r.Android, l.Android)
 	out.IOS = mergePlatform(r.IOS, l.IOS)
+	out.Desktop = mergePlatform(r.Desktop, l.Desktop)
+	out.Web = mergePlatform(r.Web, l.Web)
 	return &out
 }
 

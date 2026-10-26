@@ -88,6 +88,13 @@ func (a *app) syncBuilds(targets []string, appID string) (map[string][]*store.Ma
 // after a command changed the store. It never fails the command: it skips a
 // device without the ujibox app, and it prints other problems as warnings.
 func (a *app) autoSync(platforms ...string) {
+	var devPlatforms []string
+	for _, p := range platforms {
+		if config.IsDevicePlatform(p) {
+			devPlatforms = append(devPlatforms, p)
+		}
+	}
+	platforms = devPlatforms
 	if a.noSync || !a.global.AutoSyncOn() || a.ctx.Err() != nil || len(platforms) == 0 {
 		return
 	}

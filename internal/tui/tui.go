@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/ujizin/ujibox/internal/config"
 	"github.com/ujizin/ujibox/internal/device"
 	"github.com/ujizin/ujibox/internal/proc"
 	"github.com/ujizin/ujibox/internal/store"
@@ -212,6 +213,13 @@ func (m *model) updateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if b == nil {
 			m.status = "no stored build; press b to build"
 			return m, nil
+		}
+		if b.Platform == config.Desktop || b.Platform == config.Web {
+			if !m.deps.Project {
+				m.status = "launch a " + b.Platform + " build from its project checkout"
+				return m, nil
+			}
+			return m, m.run("launch", b.Platform, "-b", b.ID)
 		}
 		return m, m.run(append([]string{"install", "-b", b.ID}, m.targets()...)...)
 	case "I":

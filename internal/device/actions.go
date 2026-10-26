@@ -15,6 +15,8 @@ func (m *Manager) Install(ctx context.Context, d Device, artifact string) error 
 		return m.installAndroid(ctx, d, artifact)
 	case config.IOS:
 		return m.installIOS(ctx, d, artifact)
+	case config.Desktop, config.Web:
+		return NotDeviceError(d.Platform)
 	}
 	return fmt.Errorf("unknown platform %q", d.Platform)
 }
@@ -26,6 +28,8 @@ func (m *Manager) Launch(ctx context.Context, d Device, id string) error {
 		return m.launchAndroid(ctx, d, id)
 	case config.IOS:
 		return m.launchIOS(ctx, d, id)
+	case config.Desktop, config.Web:
+		return NotDeviceError(d.Platform)
 	}
 	return fmt.Errorf("unknown platform %q", d.Platform)
 }
@@ -37,6 +41,8 @@ func (m *Manager) Uninstall(ctx context.Context, d Device, id string) error {
 		return m.uninstallAndroid(ctx, d, id)
 	case config.IOS:
 		return m.uninstallIOS(ctx, d, id)
+	case config.Desktop, config.Web:
+		return NotDeviceError(d.Platform)
 	}
 	return fmt.Errorf("unknown platform %q", d.Platform)
 }
@@ -49,17 +55,22 @@ func (m *Manager) OpenURL(ctx context.Context, d Device, url, bundleID string) e
 		return m.openURLAndroid(ctx, d, url)
 	case config.IOS:
 		return m.openURLIOS(ctx, d, url, bundleID)
+	case config.Desktop, config.Web:
+		return NotDeviceError(d.Platform)
 	}
 	return fmt.Errorf("unknown platform %q", d.Platform)
 }
 
-// Screenshot writes a PNG of the device screen.
+// Screenshot writes a PNG of the device screen, or of the window of a desktop
+// or web app that uji launched.
 func (m *Manager) Screenshot(ctx context.Context, d Device, file string) error {
 	switch d.Platform {
 	case config.Android:
 		return m.screenshotAndroid(ctx, d, file)
 	case config.IOS:
 		return m.screenshotIOS(ctx, d, file)
+	case config.Desktop, config.Web:
+		return screenshotWindow(ctx, d, file)
 	}
 	return fmt.Errorf("unknown platform %q", d.Platform)
 }
@@ -72,6 +83,8 @@ func (m *Manager) RecordCmd(d Device, file string, noWindow bool) (*exec.Cmd, er
 		return m.recordAndroid(d, file, noWindow)
 	case config.IOS:
 		return m.recordIOS(d, file)
+	case config.Desktop, config.Web:
+		return recordWindow(context.Background(), d, file)
 	}
 	return nil, fmt.Errorf("unknown platform %q", d.Platform)
 }

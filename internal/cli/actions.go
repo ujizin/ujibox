@@ -115,12 +115,48 @@ func (m *mediaFlags) add(c *cobra.Command) {
 	m.platformFlags.add(c)
 }
 
-func (a *app) mediaTargets(mf mediaFlags) ([]device.Device, error) {
-	devs, err := a.mgr.Resolve(a.ctx, device.ParseSelectors(mf.devices, mf.android, mf.ios), device.AllPlatforms)
+// mediaTargets returns the devices to capture. The words desktop and web
+// select the window of the desktop or web app that uji launched.
+func (a *app) mediaTargets(mf mediaFlags, words []string) ([]device.Device, error) {
+	sel := device.ParseSelectors(append(append([]string{}, words...), mf.devices...), mf.android, mf.ios)
+	devSel, host := sel.Split()
+	var out []device.Device
+	if len(host) > 0 {
+		wins, err := device.Windows(host)
+		if err != nil {
+			return nil, err
+		}
+		out = wins
+		if len(devSel.Platforms) == 0 && len(devSel.Names) == 0 {
+			return out, nil
+		}
+	}
+	devs, err := a.mgr.Resolve(a.ctx, devSel, device.AllPlatforms)
 	if err != nil {
 		return nil, err
 	}
-	return a.mgr.EnsureReady(a.ctx, devs, func(s string) { ui.Info(os.Stderr, "%s", s) })
+	devs, err = a.mgr.EnsureReady(a.ctx, devs, func(s string) { ui.Info(os.Stderr, "%s", s) })
+	if err != nil {
+		return nil, err
+	}
+	return append(out, devs...), nil
+}
+
+// mediaArgs splits the arguments of screenshot and record into the platform
+// words (android, ios, desktop, web) and the output path.
+func mediaArgs(args []string) (words []string, path string, err error) {
+	for _, a := range args {
+		switch strings.ToLower(a) {
+		case config.Android, config.IOS, config.Desktop, config.Web:
+			words = append(words, a)
+		default:
+			if path != "" {
+				return nil, "", fmt.Errorf("two output paths: %q and %q", path, a)
+			}
+			path = a
+		}
+	}
+	return words, path, nil
 }
 
 var unsafeName = regexp.MustCompile(`[^A-Za-z0-9._@-]+`)
@@ -128,12 +164,12 @@ var unsafeName = regexp.MustCompile(`[^A-Za-z0-9._@-]+`)
 // outputPaths decides the file of each device.
 //   - no path, an existing directory, or a path that ends in /: a directory;
 //     uji writes <dir>/<branch>/<timestamp><ext>, or <dir>/<device>-<timestamp><ext>
-//     outside a git checkout
+//     outside a git checkout or when label is true
 //   - a path that ends in ext: that file
 //   - any other path: that file plus ext
 //
 // With several devices, each name gets the device name.
-func (a *app) outputPaths(arg, ext string, devs []device.Device, force bool) ([]string, error) {
+func (a *app) outputPaths(arg, ext string, devs []device.Device, label, force bool) ([]string, error) {
 	stamp := time.Now().Format("20060102-150405")
 	branch := ""
 	if wd, err := os.Getwd(); err == nil {
@@ -157,7 +193,7 @@ func (a *app) outputPaths(arg, ext string, devs []device.Device, force bool) ([]
 				dir = filepath.Join(arg, clean(branch))
 			}
 			parts := []string{}
-			if branch == "" || len(devs) > 1 {
+			if label || branch == "" || len(devs) > 1 {
 				parts = append(parts, clean(d.Label()))
 			}
 			parts = append(parts, stamp)
@@ -187,20 +223,32 @@ func (a *app) outputPaths(arg, ext string, devs []device.Device, force bool) ([]
 func cmdScreenshot(get func() *app) *cobra.Command {
 	var mf mediaFlags
 	c := &cobra.Command{
-		Use:   "screenshot [path]",
-		Short: "Save a PNG of each device screen",
+		Use:   "screenshot [android|ios|desktop|web] [path]",
+		Short: "Save a PNG of each device screen, or of the desktop or web app window",
 		Long: `Save a PNG of the screen of every running device, or of the devices given
 with --device. With a directory path (or no path), uji writes the file into a
-folder named after the branch: <dir>/<branch>/<timestamp>.png.`,
+folder named after the branch: <dir>/<branch>/<timestamp>.png.
+
+"desktop" and "web" capture the window of the app that ` + "`uji launch`" + ` started on
+this Mac. The terminal needs the Screen Recording permission (` + "`uji doctor`" + `
+checks it).`,
+		Example: `  uji screenshot
+  uji screenshot ~/Desktop
+  uji screenshot desktop
+  uji screenshot web shot.png`,
 		GroupID: "device",
-		Args:    cobra.MaximumNArgs(1),
+		Args:    cobra.MaximumNArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a := get()
-			devs, err := a.mediaTargets(mf)
+			words, path, err := mediaArgs(args)
 			if err != nil {
 				return err
 			}
-			files, err := a.outputPaths(firstArg(args), ".png", devs, mf.force)
+			devs, err := a.mediaTargets(mf, words)
+			if err != nil {
+				return err
+			}
+			files, err := a.outputPaths(path, ".png", devs, false, mf.force)
 			if err != nil {
 				return err
 			}
@@ -222,27 +270,36 @@ func cmdRecord(get func() *app) *cobra.Command {
 	var mf mediaFlags
 	var noWindow bool
 	c := &cobra.Command{
-		Use:   "record [path]",
-		Short: "Record the screen of devices to mp4 until Ctrl-C",
+		Use:   "record [android|ios|desktop|web] [path]",
+		Short: "Record the screen of devices, or the desktop or web app window, until Ctrl-C",
 		Long: `Record the screen of every running device, or of the devices given with
 --device, until you press Ctrl-C. uji then waits for each recorder to finish
 its file.
 
 With a directory path (or no path), uji writes the file into a folder named
-after the branch: <dir>/<branch>/<timestamp>.mp4.
-Android uses scrcpy; iOS uses simctl recordVideo.`,
+after the branch: <dir>/<branch>/<device>-<timestamp>.mp4.
+Android uses scrcpy; iOS uses simctl recordVideo.
+
+"desktop" and "web" record the window of the app that ` + "`uji launch`" + ` started on
+this Mac, with screencapture. The terminal needs the Screen Recording
+permission (` + "`uji doctor`" + ` checks it).`,
 		Example: `  uji record
   uji record ~/Movies
-  uji record demo.mp4 -d fold`,
+  uji record demo.mp4 -d fold
+  uji record desktop`,
 		GroupID: "device",
-		Args:    cobra.MaximumNArgs(1),
+		Args:    cobra.MaximumNArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a := get()
-			devs, err := a.mediaTargets(mf)
+			words, path, err := mediaArgs(args)
 			if err != nil {
 				return err
 			}
-			files, err := a.outputPaths(firstArg(args), ".mp4", devs, mf.force)
+			devs, err := a.mediaTargets(mf, words)
+			if err != nil {
+				return err
+			}
+			files, err := a.outputPaths(path, ".mp4", devs, true, mf.force)
 			if err != nil {
 				return err
 			}
@@ -388,49 +445,45 @@ func projectFileText(p *config.Project) string {
 	return paths.Pretty(p.EditFile())
 }
 
-func appCommand(get func() *app, use, short, verb string, fn func(a *app, d device.Device, id string) error) *cobra.Command {
+// forDevicesWithID runs fn on each selected device with the application id or
+// bundle id of the app for the device's platform.
+func (a *app) forDevicesWithID(sel device.Selection, appKey, verb string, fn func(d device.Device, id string) error) error {
+	devs, err := a.mgr.Resolve(a.ctx, sel, device.AllPlatforms)
+	if err != nil {
+		return err
+	}
+	ids := map[string]string{}
+	idErrs := map[string]error{}
+	for _, p := range devicePlatforms(devs) {
+		ids[p], idErrs[p] = a.appID(appKey, p)
+	}
+	devs, err = a.mgr.EnsureReady(a.ctx, devs, func(s string) { ui.Info(os.Stderr, "%s", s) })
+	if err != nil {
+		return err
+	}
+	return forEach(devs, func(d device.Device) (string, error) {
+		if e := idErrs[d.Platform]; e != nil {
+			return "", e
+		}
+		return verb + " " + ids[d.Platform], fn(d, ids[d.Platform])
+	})
+}
+
+func cmdUninstall(get func() *app) *cobra.Command {
 	var pf platformFlags
 	var appKey string
 	c := &cobra.Command{
-		Use:     use + " [android|ios|device...]",
-		Short:   short,
+		Use:     "uninstall [android|ios|device...]",
+		Short:   "Uninstall the app from devices",
 		GroupID: "device",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a := get()
-			devs, err := a.mgr.Resolve(a.ctx, device.ParseSelectors(args, pf.android, pf.ios), device.AllPlatforms)
-			if err != nil {
-				return err
-			}
-			ids := map[string]string{}
-			idErrs := map[string]error{}
-			for _, p := range devicePlatforms(devs) {
-				ids[p], idErrs[p] = a.appID(appKey, p)
-			}
-			devs, err = a.mgr.EnsureReady(a.ctx, devs, func(s string) { ui.Info(os.Stderr, "%s", s) })
-			if err != nil {
-				return err
-			}
-			return forEach(devs, func(d device.Device) (string, error) {
-				if e := idErrs[d.Platform]; e != nil {
-					return "", e
-				}
-				return verb + " " + ids[d.Platform], fn(a, d, ids[d.Platform])
+			return a.forDevicesWithID(device.ParseSelectors(args, pf.android, pf.ios), appKey, "removed", func(d device.Device, id string) error {
+				return a.mgr.Uninstall(a.ctx, d, id)
 			})
 		},
 	}
 	pf.add(c)
 	c.Flags().StringVar(&appKey, "app", "", "app of the project")
 	return c
-}
-
-func cmdLaunch(get func() *app) *cobra.Command {
-	return appCommand(get, "launch", "Launch the app on devices", "launched", func(a *app, d device.Device, id string) error {
-		return a.mgr.Launch(a.ctx, d, id)
-	})
-}
-
-func cmdUninstall(get func() *app) *cobra.Command {
-	return appCommand(get, "uninstall", "Uninstall the app from devices", "removed", func(a *app, d device.Device, id string) error {
-		return a.mgr.Uninstall(a.ctx, d, id)
-	})
 }

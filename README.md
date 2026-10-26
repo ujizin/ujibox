@@ -2,9 +2,9 @@
 
 <h1 align="center">ujibox</h1>
 
-ujibox (`uji`) is a CLI that helps you build and debug Android and iOS
-apps. It builds your app, keeps each build, and puts it on emulators,
-simulators and devices in one step.
+ujibox (`uji`) is a CLI that helps you build and debug Android, iOS,
+desktop and web apps. It builds your app, keeps each build, and runs it on
+emulators, simulators, devices or your Mac in one step.
 
 ```sh
 uji install            # build, store and install on every running device
@@ -22,6 +22,7 @@ uji                    # the interactive screen
 - Build store by app and branch, kept for 30 days
 - Install on many devices at once, or reinstall a stored build
 - Deeplinks, screenshots and screen recording
+- Desktop and web apps: build, launch, screenshot and record on your Mac
 - Boot and shut down emulators and simulators
 - The ujibox app: your builds on the device, synced after each build
 - Agent skills for Claude Code, Codex and Gemini CLI: `uji add skills`
@@ -34,12 +35,27 @@ uji                    # the interactive screen
 | Android device | yes | yes | yes | yes | yes |
 | iOS simulator | yes | yes | yes | yes | yes |
 | iOS device | yes¹ | yes | yes | yes² | yes² |
+| Desktop (this Mac) | yes | launch³ | no | yes⁴ | yes⁴ |
+| Web (Chrome) | yes | launch³ | no | yes⁴ | yes⁴ |
 
 ¹ A build for a physical iPhone needs code signing.
 
 ² Screenshots and recording on a physical iPhone need Xcode 27 or later.
 
-The host is macOS.
+³ uji does not install desktop and web apps. `uji launch` starts the stored
+build.
+
+⁴ The terminal needs the Screen Recording permission.
+
+## Requirements
+
+- uji runs on macOS only.
+- uji works with any Android project that Gradle builds and any iOS project
+  that Xcode builds. The project does not have to be Kotlin Multiplatform.
+  A build is a list of shell commands, so a wrapper script also works.
+- uji detects desktop and web apps only in Compose Multiplatform and Kotlin
+  web modules. For other desktop or web projects, write the build commands
+  in the project file.
 
 ## Install
 
@@ -67,12 +83,14 @@ The host is macOS.
 - Android needs the Android SDK.
 - iOS needs Xcode.
 - Android screen recording needs [scrcpy](https://github.com/Genymobile/scrcpy).
+- Web apps open in Google Chrome.
 
 ## Documentation
 
 Read the docs at [ujizin.github.io/ujibox](https://ujizin.github.io/ujibox/):
 [get started](https://ujizin.github.io/ujibox/getting-started/),
-[commands](https://ujizin.github.io/ujibox/commands/) and
+[commands](https://ujizin.github.io/ujibox/commands/),
+[desktop and web apps](https://ujizin.github.io/ujibox/desktop-web/) and
 [the ujibox app](https://ujizin.github.io/ujibox/app/).
 
 ## Contributing

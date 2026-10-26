@@ -170,7 +170,7 @@ type scopeFlags struct {
 
 func (s *scopeFlags) add(c *cobra.Command) {
 	c.Flags().StringVar(&s.app, "app", "", "app of the project")
-	c.Flags().StringVarP(&s.platform, "platform", "p", "", "android or ios")
+	c.Flags().StringVarP(&s.platform, "platform", "p", "", "android, ios, desktop or web")
 }
 
 // filter scopes to the app of the current checkout when there is one.

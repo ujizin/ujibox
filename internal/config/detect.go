@@ -18,7 +18,8 @@ import (
 )
 
 // Detect guesses a project from the files of a checkout. It returns nil when
-// it finds no Android application module and no Xcode project.
+// it finds no Android application module, no Xcode project, no Compose
+// desktop application and no Kotlin web application.
 func Detect(g gitinfo.Info) *Project {
 	d := detectAll(g, false)
 	if d == nil {
@@ -133,22 +134,59 @@ func detectAll(g gitinfo.Info, slow bool) *Detection {
 		target.IOS = pl
 		det.Notes[target.Key+".ios"] = notes
 	}
+
+	// Desktop and web apps join the app of the same name, or the only app.
+	for _, f := range gradleFiles {
+		for _, name := range []string{Desktop, Web} {
+			detect := detectDesktop
+			if name == Web {
+				detect = detectWeb
+			}
+			pl, notes := detect(root, f)
+			if pl == nil {
+				continue
+			}
+			key := appKey(filepath.Dir(f))
+			if key == "" {
+				key = det.Project.Name
+			}
+			target := det.Project.Apps[key]
+			if target == nil && len(det.Project.Apps) == 1 {
+				for _, a := range det.Project.Apps {
+					target = a
+				}
+			}
+			if target == nil || target.Platform(name) != nil {
+				key = uniqueKey(det.Project.Apps, key)
+				target = &App{Key: key}
+				det.Project.Apps[key] = target
+			}
+			if name == Desktop {
+				target.Desktop = pl
+			} else {
+				target.Web = pl
+			}
+			det.Notes[target.Key+"."+name] = notes
+		}
+	}
 	if len(det.Project.Apps) == 0 {
 		return nil
 	}
 
 	// A worktree has no local.properties; Gradle then fails with "SDK location
-	// not found". Copy it from the main checkout.
+	// not found". Copy it from the main checkout. A desktop or web build in a
+	// Gradle build with Android modules needs it too.
 	for _, a := range det.Project.Apps {
-		if a.Android == nil {
-			continue
-		}
-		props := filepath.Join(a.Android.gradleRoot, "local.properties")
-		if Exists(filepath.Join(g.MainRoot, props)) {
+		for _, name := range a.Platforms() {
+			pl := a.Platform(name)
+			if name == IOS || !Exists(filepath.Join(g.MainRoot, pl.gradleRoot, "local.properties")) {
+				continue
+			}
+			props := filepath.Join(pl.gradleRoot, "local.properties")
 			copyCmd := `cp "{main_root}/` + props + `" "{root}/` + props + `"`
-			a.Android.Setup = append(a.Android.Setup, Step{Run: copyCmd, Creates: props})
-			a.Android.Retry = append(a.Android.Retry, Retry{Match: `SDK location not found|local\.properties`, Then: copyCmd})
-			det.Notes[a.Key+".android"] = append(det.Notes[a.Key+".android"],
+			pl.Setup = append(pl.Setup, Step{Run: copyCmd, Creates: props})
+			pl.Retry = append(pl.Retry, Retry{Match: `SDK location not found|local\.properties`, Then: copyCmd})
+			det.Notes[a.Key+"."+name] = append(det.Notes[a.Key+"."+name],
 				"the main checkout has local.properties, so each new worktree copies it before the build")
 		}
 	}
@@ -190,11 +228,7 @@ func detectAndroid(root, gradleFile string) (*Platform, []string) {
 		return nil, nil
 	}
 	moduleDir := filepath.Dir(gradleFile)
-	gradleRoot := findGradleRoot(root, moduleDir)
-	module := ""
-	if rel, _ := filepath.Rel(gradleRoot, moduleDir); rel != "." {
-		module = ":" + strings.ReplaceAll(rel, string(filepath.Separator), ":")
-	}
+	gradle, module, gradleRoot, gradleNotes := gradleCommand(root, moduleDir)
 	var notes []string
 	notes = append(notes, fmt.Sprintf("found an Android application module in %s", gradleFile))
 
@@ -224,15 +258,7 @@ func detectAndroid(root, gradleFile string) (*Platform, []string) {
 		}
 	}
 
-	gradle := "./gradlew"
-	if !Exists(filepath.Join(root, gradleRoot, "gradlew")) {
-		gradle = "gradle"
-		notes = append(notes, "no gradlew next to the settings file; using gradle from PATH")
-	}
-	if gradleRoot != "." {
-		gradle = "cd " + shellWord(gradleRoot) + " && " + gradle
-		notes = append(notes, fmt.Sprintf("the Gradle build starts in %s", gradleRoot))
-	}
+	notes = append(notes, gradleNotes...)
 	task := module + ":assemble" + upperFirst(flavor) + "Debug"
 	artifactDir := filepath.Join(moduleDir, "build", "outputs", "apk")
 	if flavor != "" {
@@ -246,6 +272,94 @@ func detectAndroid(root, gradleFile string) (*Platform, []string) {
 	if m := appIDRe.FindStringSubmatch(text); m != nil {
 		pl.ID = m[1] + flavorSuffix
 		notes = append(notes, "id comes from applicationId and the flavor suffix; the build reads the real one from the APK")
+	}
+	return pl, notes
+}
+
+// gradleCommand returns the command that starts Gradle for a module, the
+// Gradle path of the module (":sample:desktop", or "" for the root project),
+// and the directory of the settings file.
+func gradleCommand(root, moduleDir string) (gradle, module, gradleRoot string, notes []string) {
+	gradleRoot = findGradleRoot(root, moduleDir)
+	if rel, _ := filepath.Rel(gradleRoot, moduleDir); rel != "." {
+		module = ":" + strings.ReplaceAll(rel, string(filepath.Separator), ":")
+	}
+	gradle = "./gradlew"
+	if !Exists(filepath.Join(root, gradleRoot, "gradlew")) {
+		gradle = "gradle"
+		notes = append(notes, "no gradlew next to the settings file; using gradle from PATH")
+	}
+	if gradleRoot != "." {
+		gradle = "cd " + shellWord(gradleRoot) + " && " + gradle
+		notes = append(notes, fmt.Sprintf("the Gradle build starts in %s", gradleRoot))
+	}
+	return gradle, module, gradleRoot, notes
+}
+
+var (
+	desktopAppRe   = regexp.MustCompile(`compose\.desktop\s*\{`)
+	desktopMainRe  = regexp.MustCompile(`\bapplication\s*\{`)
+	bundleIDRe     = regexp.MustCompile(`bundleID\s*=\s*["']([^"']+)["']`)
+	executableRe   = regexp.MustCompile(`binaries\.executable\(\)`)
+	wasmJsTargetRe = regexp.MustCompile(`\bwasmJs\s*[({]`)
+	jsTargetRe     = regexp.MustCompile(`\bjs\s*[({]`)
+)
+
+// detectDesktop finds a Compose desktop application:
+// compose.desktop { application { ... } }. The build makes a .app for this
+// Mac with createDistributable.
+func detectDesktop(root, gradleFile string) (*Platform, []string) {
+	data, err := os.ReadFile(filepath.Join(root, gradleFile))
+	if err != nil {
+		return nil, nil
+	}
+	text := applyFalseRe.ReplaceAllString(string(data), "")
+	loc := desktopAppRe.FindStringIndex(text)
+	if loc == nil || !desktopMainRe.MatchString(braceBlock(text[loc[1]-1:])) {
+		return nil, nil
+	}
+	moduleDir := filepath.Dir(gradleFile)
+	gradle, module, gradleRoot, gradleNotes := gradleCommand(root, moduleDir)
+	notes := append([]string{fmt.Sprintf("found a Compose desktop application in %s", gradleFile)}, gradleNotes...)
+	pl := &Platform{
+		Build:      []string{gradle + " " + module + ":createDistributable"},
+		Artifact:   filepath.Join(moduleDir, "build", "compose", "binaries", "main", "app", "*.app"),
+		gradleRoot: gradleRoot,
+	}
+	if m := bundleIDRe.FindStringSubmatch(text); m != nil {
+		pl.ID = m[1]
+	}
+	notes = append(notes, "the build reads the bundle id and the version from the Info.plist of the .app")
+	return pl, notes
+}
+
+// detectWeb finds a Kotlin web application: a wasmJs or js target with
+// binaries.executable(). The build makes the production dist folder.
+func detectWeb(root, gradleFile string) (*Platform, []string) {
+	data, err := os.ReadFile(filepath.Join(root, gradleFile))
+	if err != nil {
+		return nil, nil
+	}
+	text := applyFalseRe.ReplaceAllString(string(data), "")
+	if !executableRe.MatchString(text) {
+		return nil, nil
+	}
+	target := ""
+	switch {
+	case wasmJsTargetRe.MatchString(text):
+		target = "wasmJs"
+	case jsTargetRe.MatchString(text):
+		target = "js"
+	default:
+		return nil, nil
+	}
+	moduleDir := filepath.Dir(gradleFile)
+	gradle, module, gradleRoot, gradleNotes := gradleCommand(root, moduleDir)
+	notes := append([]string{fmt.Sprintf("found a Kotlin %s application in %s", target, gradleFile)}, gradleNotes...)
+	pl := &Platform{
+		Build:      []string{gradle + " " + module + ":" + target + "BrowserDistribution"},
+		Artifact:   filepath.Join(moduleDir, "build", "dist", target, "productionExecutable"),
+		gradleRoot: gradleRoot,
 	}
 	return pl, notes
 }
@@ -413,6 +527,8 @@ var genericSegments = map[string]bool{
 	"android": true, "ios": true, "app": true, "composeapp": true, "androidapp": true,
 	"iosapp": true, "apps": true, "src": true, "mobile": true, "client": true, ".": true,
 	"example": true, "examples": true, "sample": true, "samples": true, "demo": true,
+	"desktop": true, "desktopapp": true, "jvm": true, "web": true, "webapp": true,
+	"wasmjs": true, "wasmjsapp": true, "js": true, "jsapp": true,
 }
 
 // appKey names an app after its module path: the last segment that is not a
@@ -545,9 +661,14 @@ func (d *Detection) render(repo bool) string {
 			for _, n := range d.Notes[k+"."+name] {
 				fmt.Fprintf(&b, "# %s\n", n)
 			}
-			if pl.ID != "" {
+			switch {
+			case pl.ID != "":
 				fmt.Fprintf(&b, "id = %q\n", pl.ID)
-			} else {
+			case name == Web:
+				fmt.Fprintf(&b, "id = %q   # a web build has no id; uji shows this name\n", k)
+			case name == Desktop:
+				b.WriteString("# id = \"\"   # the build reads the bundle id from the .app; a jar needs it here\n")
+			default:
 				b.WriteString("id = \"\"   # application id / bundle id, used by launch and uninstall\n")
 			}
 			b.WriteString("build = [\n")
@@ -555,10 +676,15 @@ func (d *Detection) render(repo bool) string {
 				fmt.Fprintf(&b, "  %s,\n", tomlString(c))
 			}
 			b.WriteString("]\n")
-			if name == Android {
+			switch name {
+			case Android:
 				b.WriteString("# A wrapper works too: build = [\"scripts/my_gradle.py :app:assembleDevDebug\"]\n")
-			} else {
+			case IOS:
 				b.WriteString("# KMP projects often need ARCHS=arm64 for simulator builds; add it to the xcodebuild line.\n")
+			case Desktop:
+				b.WriteString("# A jar works too: build packageUberJarForCurrentOS, artifact = '<module>/build/compose/jars/*.jar'\n")
+			case Web:
+				b.WriteString("# The artifact is the folder with index.html; `uji launch web` serves it.\n")
 			}
 			fmt.Fprintf(&b, "artifact = %s\n", tomlString(pl.Artifact))
 			for _, s := range pl.Setup {

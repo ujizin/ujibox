@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ujizin/ujibox/internal/config"
+	"github.com/ujizin/ujibox/internal/device"
 	"github.com/ujizin/ujibox/internal/gitinfo"
 	"github.com/ujizin/ujibox/internal/paths"
 	"github.com/ujizin/ujibox/internal/store"
@@ -48,6 +49,13 @@ func cmdDoctor(get func() *app) *cobra.Command {
 			optional(t.Scrcpy != "", "scrcpy", paths.Pretty(t.Scrcpy), "not found: `brew install scrcpy` to record Android")
 			check(t.HasSimctl(), "Xcode", t.DeveloperDir, "simctl not found: install Xcode or set developer_dir")
 			optional(t.HasDevicectl(), "devicectl", "physical iOS devices", "not found: physical iOS devices need Xcode 15 or later")
+			chrome := device.ChromePath()
+			optional(chrome != "", "Chrome", paths.Pretty(chrome), "not found: `uji launch web` serves the app, but screenshot and record need its Chrome window")
+			if ok, known := device.ScreenCaptureAllowed(); known {
+				optional(ok, "screen record", "the terminal has the Screen Recording permission",
+					"the terminal has no Screen Recording permission, so uji cannot capture desktop and web windows. "+
+						"Turn it on for your terminal app in System Settings > Privacy & Security > Screen & System Audio Recording, then restart the terminal")
+			}
 			if sel, err := exec.Command("xcode-select", "-p").Output(); err == nil && t.DeveloperDir != "" {
 				if s := strings.TrimSpace(string(sel)); s != t.DeveloperDir {
 					ui.Info(os.Stdout, "%s", ui.Dim("xcode-select points at "+s+"; uji uses "+t.DeveloperDir))

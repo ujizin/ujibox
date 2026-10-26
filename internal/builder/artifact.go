@@ -69,12 +69,20 @@ func FindArtifact(root, pattern string) (string, error) {
 // Inspect checks that an artifact is complete and reads its identity. An
 // interrupted iOS build leaves a bundle without Info.plist; simctl then fails
 // with "Missing bundle ID", so that bundle is rejected here.
+//
+// A desktop .app has its id and version in Contents/Info.plist. A jar and a
+// web dist folder have no standard place for them: the id comes from the
+// config, and the version stays empty.
 func Inspect(ctx context.Context, platform, target, path, aapt2 string) (id string, v store.Version, err error) {
 	switch platform {
 	case config.Android:
 		return inspectAPK(ctx, path, aapt2)
 	case config.IOS:
 		return inspectApp(ctx, path, target)
+	case config.Desktop:
+		return inspectDesktop(ctx, path)
+	case config.Web:
+		return "", v, inspectWeb(path)
 	}
 	return "", v, fmt.Errorf("unknown platform %q", platform)
 }
@@ -162,4 +170,51 @@ func inspectApp(ctx context.Context, path, target string) (string, store.Version
 	v.Name = read("CFBundleShortVersionString")
 	v.Code = read("CFBundleVersion")
 	return id, v, nil
+}
+
+func inspectDesktop(ctx context.Context, path string) (string, store.Version, error) {
+	v := store.Version{}
+	switch {
+	case strings.HasSuffix(path, ".jar"):
+		zr, err := zip.OpenReader(path)
+		if err != nil {
+			return "", v, fmt.Errorf("%s is not a valid jar: %w", path, err)
+		}
+		zr.Close()
+		return "", v, nil
+	case !strings.HasSuffix(path, ".app"):
+		return "", v, fmt.Errorf("%s is not a .app or a .jar", path)
+	}
+	plist := filepath.Join(path, "Contents", "Info.plist")
+	if _, err := os.Stat(plist); err != nil {
+		return "", v, fmt.Errorf("%s has no Contents/Info.plist; the build was interrupted, run it again", path)
+	}
+	read := func(key string) string {
+		out, err := exec.CommandContext(ctx, "plutil", "-extract", key, "raw", "-o", "-", plist).Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
+	}
+	exe := read("CFBundleExecutable")
+	if exe == "" {
+		return "", v, fmt.Errorf("%s has no CFBundleExecutable", plist)
+	}
+	if _, err := os.Stat(filepath.Join(path, "Contents", "MacOS", exe)); err != nil {
+		return "", v, fmt.Errorf("%s has no executable %s; the build was interrupted, run it again", path, exe)
+	}
+	v.Name = read("CFBundleShortVersionString")
+	v.Code = read("CFBundleVersion")
+	return read("CFBundleIdentifier"), v, nil
+}
+
+func inspectWeb(path string) error {
+	st, err := os.Stat(path)
+	if err != nil || !st.IsDir() {
+		return fmt.Errorf("%s is not a folder; the web artifact is the dist folder with index.html", path)
+	}
+	if _, err := os.Stat(filepath.Join(path, "index.html")); err != nil {
+		return fmt.Errorf("%s has no index.html", path)
+	}
+	return nil
 }

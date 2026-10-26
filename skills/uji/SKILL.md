@@ -1,6 +1,6 @@
 ---
 name: uji
-description: Build, install and check an Android or iOS app on emulators, simulators and devices with the uji CLI (ujibox). Use it to run the app after a code change, install a stored build again, open a deeplink, take a screenshot to check the UI, record the screen, or list the devices.
+description: Build, install and check an Android or iOS app on emulators, simulators and devices with the uji CLI (ujibox), or build and launch a desktop or web app on this Mac. Use it to run the app after a code change, install a stored build again, open a deeplink, take a screenshot to check the UI, record the screen, or list the devices.
 ---
 
 # Use uji to run and check a mobile app
@@ -53,6 +53,34 @@ uji record /tmp/uji-check -d "<device>" --no-window &
 kill -INT %1; wait
 ```
 
+## Desktop and web apps
+
+Desktop and web apps run on this Mac. uji builds, launches and captures them;
+it does not install them.
+
+```sh
+uji build desktop && uji launch desktop
+uji screenshot desktop /tmp/uji-check
+```
+
+`uji launch web` serves the app and opens a Chrome window until it gets
+Ctrl-C, so run it in the background:
+
+```sh
+uji build web
+uji launch web &
+uji screenshot web /tmp/uji-check
+kill -INT %1; wait
+```
+
+- Screenshot and record find only the window of an app that `uji launch`
+  started.
+- They need the Screen Recording permission of the terminal. If uji reports
+  that the terminal cannot capture the screen, tell the user to turn it on.
+  Do not try to change the permission yourself.
+- `install`, `deeplink`, `sync` and the other device commands reject
+  `desktop` and `web`.
+
 ## Deeplinks
 
 Put the URL in quotes, because the shell reads `&` and `?`:
@@ -65,7 +93,7 @@ uji deeplink "myapp://orders/42?tab=details" -A
 
 | Task | Command |
 |---|---|
-| Launch the app | `uji launch` |
+| Launch the app | `uji launch` (devices), `uji launch desktop`, `uji launch web` |
 | Uninstall the app | `uji uninstall` |
 | See the stored builds | `uji builds` |
 | Build without an install | `uji build` |

@@ -2,9 +2,9 @@
 
 # ujibox
 
-ujibox (`uji`) is a CLI that helps you build and debug Android and iOS
-apps. It builds your app, keeps each build, and puts it on emulators,
-simulators and devices in one step.
+ujibox (`uji`) is a CLI that helps you build and debug Android, iOS,
+desktop and web apps. It builds your app, keeps each build, and runs it on
+emulators, simulators, devices or your Mac in one step.
 
 ```console
 $ uji install
@@ -23,6 +23,8 @@ $ uji install
 - Installs a build on many devices in parallel, and reports each device.
 - Installs a stored build again without a rebuild: `uji install --last`.
 - Opens deeplinks, takes screenshots and records the screen.
+- Builds desktop and web apps, launches them on this Mac, and captures their
+  windows. See [Desktop and web apps](desktop-web.md).
 - Lists, boots and shuts down emulators and simulators.
 - Copies the stored builds to the ujibox app on a device: `uji sync`. After
   each new build, uji syncs again by itself.
@@ -36,12 +38,26 @@ $ uji install
 | Android device | yes | yes | yes | yes | yes (scrcpy) |
 | iOS simulator | yes | yes | yes | yes | yes (simctl) |
 | iOS device | yes¹ | yes | yes | yes² | yes² (devicectl) |
+| Desktop (this Mac) | yes | launch³ | no | yes⁴ | yes⁴ (screencapture) |
+| Web (Chrome) | yes | launch³ | no | yes⁴ | yes⁴ (screencapture) |
 
 ¹ A build for a physical iPhone needs code signing.
 
 ² Screenshots and recording on a physical iPhone need Xcode 27 or later.
 
-The host is macOS.
+³ uji does not install desktop and web apps. `uji launch` starts the stored
+build.
+
+⁴ The terminal needs the Screen Recording permission.
+
+## Requirements
+
+- uji runs on macOS only.
+- uji works with any Android project that Gradle builds and any iOS project
+  that Xcode builds. The project does not have to be Kotlin Multiplatform.
+- uji detects desktop and web apps only in Compose Multiplatform and Kotlin
+  web modules. For other projects, write the build commands in the
+  [project file](projects.md).
 
 ## Next steps
 

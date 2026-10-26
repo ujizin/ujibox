@@ -16,11 +16,18 @@ import (
 	"github.com/ujizin/ujibox/internal/paths"
 )
 
-// Platform names.
+// Platform names. Android and iOS apps run on devices; desktop and web apps
+// run on this Mac.
 const (
 	Android = "android"
 	IOS     = "ios"
+	Desktop = "desktop"
+	Web     = "web"
 )
+
+// IsDevicePlatform reports whether apps of the platform run on devices that
+// uji lists, installs on and syncs: Android and iOS.
+func IsDevicePlatform(p string) bool { return p == Android || p == IOS }
 
 // Project is one file in ~/.config/ujibox/projects. It tells ujibox how to
 // build the apps of a repo. It lives on the user's machine, never in the repo.
@@ -56,6 +63,8 @@ type App struct {
 	Retry   []Retry           `toml:"retry,omitempty"`
 	Android *Platform         `toml:"android,omitempty"`
 	IOS     *Platform         `toml:"ios,omitempty"`
+	Desktop *Platform         `toml:"desktop,omitempty"`
+	Web     *Platform         `toml:"web,omitempty"`
 
 	// Key is the table name under [apps]. ujibox fills it in.
 	Key string `toml:"-"`
@@ -63,14 +72,15 @@ type App struct {
 
 // Platform tells ujibox how to build one platform of an app.
 type Platform struct {
-	// ID is the Android application id or the iOS bundle id. ujibox reads the
-	// real value from the artifact after a build; this one serves launch,
-	// uninstall and builds that are not stored yet.
+	// ID is the Android application id, the iOS or macOS bundle id, or a name
+	// for a web app. ujibox reads the real value from the artifact after a
+	// build, when the artifact has one; this one serves launch, uninstall and
+	// builds that are not stored yet.
 	ID string `toml:"id,omitempty"`
 	// Build is the list of shell commands that produce the artifact.
 	Build []string `toml:"build"`
-	// Artifact is a glob, relative to the checkout root, that finds the APK or
-	// the .app after the build. "**" matches any number of directories.
+	// Artifact is a glob, relative to the checkout root, that finds the APK,
+	// the .app, the desktop .app or .jar, or the web dist folder after the build. "**" matches any number of directories.
 	Artifact string            `toml:"artifact"`
 	Env      map[string]string `toml:"env,omitempty"`
 	Setup    []Step            `toml:"setup,omitempty"`
@@ -141,18 +151,24 @@ func (a *App) Platform(p string) *Platform {
 		return a.Android
 	case IOS:
 		return a.IOS
+	case Desktop:
+		return a.Desktop
+	case Web:
+		return a.Web
 	}
 	return nil
 }
 
-// Platforms lists the platforms the app can build, Android first.
+// AllPlatforms lists every platform in the order uji builds them.
+var AllPlatforms = []string{Android, IOS, Desktop, Web}
+
+// Platforms lists the platforms the app can build, in the order of AllPlatforms.
 func (a *App) Platforms() []string {
 	var out []string
-	if a.Android != nil {
-		out = append(out, Android)
-	}
-	if a.IOS != nil {
-		out = append(out, IOS)
+	for _, p := range AllPlatforms {
+		if a.Platform(p) != nil {
+			out = append(out, p)
+		}
 	}
 	return out
 }
@@ -284,8 +300,8 @@ func (p *Project) normalize() error {
 			return fmt.Errorf("app %q is empty", k)
 		}
 		a.Key = k
-		if a.Android == nil && a.IOS == nil {
-			return fmt.Errorf("app %q has neither [apps.%s.android] nor [apps.%s.ios]", k, k, k)
+		if len(a.Platforms()) == 0 {
+			return fmt.Errorf("app %q has no platform table; add [apps.%s.android], [apps.%s.ios], [apps.%s.desktop] or [apps.%s.web]", k, k, k, k, k)
 		}
 		for _, name := range a.Platforms() {
 			pl := a.Platform(name)
@@ -294,6 +310,9 @@ func (p *Project) normalize() error {
 			}
 			if pl.Artifact == "" {
 				return fmt.Errorf("apps.%s.%s.artifact is empty", k, name)
+			}
+			if pl.Device != nil && name != IOS {
+				return fmt.Errorf("apps.%s.%s.device: only ios has a device build", k, name)
 			}
 		}
 	}

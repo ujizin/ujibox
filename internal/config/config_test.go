@@ -283,3 +283,70 @@ android { defaultConfig { applicationId = "com.example.shop" } }`)
 		t.Errorf("override:\n%s", over)
 	}
 }
+
+func TestDetectDesktopAndWeb(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "settings.gradle.kts"), `include(":sample:android", ":sample:desktop", ":sample:web")`)
+	write(t, filepath.Join(root, "gradlew"), "")
+	write(t, filepath.Join(root, "build.gradle.kts"), `plugins {
+    alias(libs.plugins.androidApplication) apply false
+}`)
+	write(t, filepath.Join(root, "sample/android/build.gradle.kts"), `plugins { id("com.android.application") }
+android { defaultConfig { applicationId = "com.example.shop" } }`)
+	write(t, filepath.Join(root, "sample/desktop/build.gradle.kts"), `
+compose.desktop {
+    application {
+        mainClass = "MainKt"
+        nativeDistributions { macOS { bundleID = "com.example.shop.desktop" } }
+    }
+}`)
+	write(t, filepath.Join(root, "sample/web/build.gradle.kts"), `kotlin {
+    js { browser(); binaries.executable() }
+    wasmJs { browser(); binaries.executable() }
+}`)
+	write(t, filepath.Join(root, "local.properties"), "sdk.dir=/x")
+	d := DetectVerbose(gitinfo.Info{Root: root, MainRoot: root})
+	if d == nil || len(d.Project.Apps) != 1 {
+		t.Fatalf("want one app with every platform, got %v", d.Project.AppKeys())
+	}
+	var a *App
+	for _, x := range d.Project.Apps {
+		a = x
+	}
+	if a.Desktop == nil || a.Web == nil || a.Android == nil {
+		t.Fatalf("platforms = %v", a.Platforms())
+	}
+	if a.Desktop.Build[0] != "./gradlew :sample:desktop:createDistributable" || a.Desktop.ID != "com.example.shop.desktop" {
+		t.Errorf("desktop = %+v", a.Desktop)
+	}
+	if !strings.HasSuffix(a.Desktop.Artifact, "sample/desktop/build/compose/binaries/main/app/*.app") {
+		t.Errorf("desktop artifact = %q", a.Desktop.Artifact)
+	}
+	if a.Web.Build[0] != "./gradlew :sample:web:wasmJsBrowserDistribution" || a.Web.Artifact != "sample/web/build/dist/wasmJs/productionExecutable" {
+		t.Errorf("web = %+v", a.Web)
+	}
+	if len(a.Desktop.Setup) != 1 || len(a.Web.Setup) != 1 {
+		t.Errorf("desktop and web builds must copy local.properties into a worktree: %+v %+v", a.Desktop.Setup, a.Web.Setup)
+	}
+	file := filepath.Join(t.TempDir(), "p.toml")
+	write(t, file, d.Render())
+	if _, err := LoadProjectFile(file); err != nil {
+		t.Errorf("the rendered file does not load: %v", err)
+	}
+}
+
+func TestDesktopOnlyProject(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.toml")
+	write(t, file, "[apps.a.desktop]\nbuild=['x']\nartifact='y.app'\n[apps.a.web]\nbuild=['x']\nartifact='dist'\nid='a'\n")
+	p, err := LoadProjectFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(p.Apps["a"].Platforms(), ","); got != "desktop,web" {
+		t.Errorf("platforms = %s", got)
+	}
+	write(t, file, "[apps.a.desktop]\nbuild=['x']\nartifact='y.app'\n[apps.a.desktop.device]\nbuild=['x']\nartifact='z'\n")
+	if _, err := LoadProjectFile(file); err == nil {
+		t.Error("a device build outside ios must fail")
+	}
+}

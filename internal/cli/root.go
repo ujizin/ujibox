@@ -118,9 +118,10 @@ func newRoot(ctx context.Context) *cobra.Command {
 	}
 	root := &cobra.Command{
 		Use:   "uji",
-		Short: "Build, store and install Android and iOS apps on emulators and simulators",
+		Short: "Build, store and run Android, iOS, desktop and web apps",
 		Long: `uji builds your app, keeps each build outside the project for 30 days,
-and installs it on Android emulators, Android devices and iOS simulators.
+and installs it on Android emulators, Android devices, iOS simulators and
+iPhones. Desktop and web builds launch on this Mac.
 
 A device selector is "android", "ios", or a device name: an alias, an AVD
 name, a simulator name (add @<os> when it repeats), a serial or a UDID.

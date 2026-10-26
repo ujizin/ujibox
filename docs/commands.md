@@ -3,7 +3,9 @@
 Run `uji help <command>` for the full help of a command.
 
 A `[selector]` is `android`, `ios` or a device name. See
-[Select devices](devices.md).
+[Select devices](devices.md). `build`, `setup`, `launch`, `screenshot` and
+`record` also take `desktop` and `web`. See
+[Desktop and web apps](desktop-web.md).
 
 Every command accepts `--no-sync`. It turns off [auto-sync](sync.md#auto-sync)
 for that command.
@@ -16,6 +18,7 @@ Builds the app and keeps the artifact in the store. It does not install it.
 
 - With no selector, uji builds every platform of the app.
 - `android` or `ios` builds one platform. An iOS build is for simulators.
+- `desktop` or `web` builds the [desktop or web app](desktop-web.md).
 - A device name builds what that device needs. A physical iPhone needs a
   [device build](projects.md#device-builds).
 
@@ -30,6 +33,7 @@ Builds the app and keeps the artifact in the store. It does not install it.
 ```sh
 uji build
 uji build ios --clean
+uji build desktop
 uji build --ios-device
 ```
 
@@ -65,7 +69,10 @@ uji install -b feature/login
 If the stored build is from another commit than `HEAD`, or from uncommitted
 changes, uji shows a warning and installs it.
 
-### `uji setup [android|ios]`
+uji does not install desktop and web builds. Use `uji launch desktop` or
+`uji launch web`.
+
+### `uji setup [android|ios|desktop|web]`
 
 Runs the setup steps of the project file without a build. Use it after you
 make a new worktree. `uji build` also runs these steps.
@@ -118,8 +125,8 @@ The file name follows the path:
 
 | Path | File |
 |---|---|
-| none | `./<branch>/<time>.mp4` |
-| a directory, or a path that ends in `/` | `<dir>/<branch>/<time>.mp4` |
+| none | `./<branch>/<device>-<time>.mp4` |
+| a directory, or a path that ends in `/` | `<dir>/<branch>/<device>-<time>.mp4` |
 | `demo.mp4` | `demo.mp4` |
 | `demo` | `demo.mp4` |
 
@@ -138,16 +145,31 @@ folder, and the file is `<dir>/<device>-<time>.mp4`.
 
 Android recording uses scrcpy. iOS recording uses `simctl io recordVideo`.
 
+`uji record desktop` and `uji record web` record the window of the app that
+`uji launch` started, with `screencapture`. See
+[Desktop and web apps](desktop-web.md#screenshot-and-record).
+
 ### `uji screenshot [path]`
 
 Saves a PNG of each device screen. The path rules are the same as for
-`uji record`, with `.png`.
+`uji record`, with `.png`. `uji screenshot desktop` and `uji screenshot web`
+capture the window of the app that `uji launch` started.
 
 ### `uji launch [selector...]` and `uji uninstall [selector...]`
 
 Launch or uninstall the app of the project. uji takes the application id or
 bundle id from the newest stored build. If there is no stored build, uji
 takes it from the `id` field of the project file.
+
+`uji launch desktop` starts the newest stored desktop build on this Mac.
+`uji launch web` serves the newest stored web build and opens it in Chrome,
+until you press ++ctrl+c++. See [Desktop and web apps](desktop-web.md#launch).
+
+| Flag | Meaning |
+|---|---|
+| `--app <name>` | The app, when the project has more than one |
+| `-b, --build <ref>` | Desktop and web: launch another stored build |
+| `--any-branch` | Desktop and web: take the newest build of any branch |
 
 ### `uji boot <device>...` and `uji shutdown <selector>...`
 
@@ -166,7 +188,7 @@ then builds, newest first.
 | `uji builds pin <ref>` | Keep a build after the retention period |
 | `uji builds unpin <ref>` | Let a pinned build expire again |
 | `uji builds rm <ref>` | Remove a build |
-| `uji builds path <ref>` | Print the path of the APK or `.app` |
+| `uji builds path <ref>` | Print the path of the APK, the `.app`, the jar or the web folder |
 | `uji builds prune [--dry-run]` | Remove the expired builds now |
 
 ### `uji sync [selector...]`
@@ -202,7 +224,9 @@ uji add skills --global --claude
 
 ### `uji doctor`
 
-Checks the tools, the config files and the store.
+Checks the tools, the config files and the store. It also checks for Google
+Chrome, and for the Screen Recording permission of the terminal, which
+desktop and web captures need.
 
 ### `uji help [command]` and `uji completion <shell>`
 

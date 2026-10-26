@@ -240,7 +240,7 @@ machine, or ` + config.RepoFileName + ` when there is no file on this machine.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, target := args[0], args[1]
 			switch strings.ToLower(name) {
-			case "android", "ios", "all":
+			case "android", "ios", "desktop", "web", "all":
 				return fmt.Errorf("%q is a platform word; pick another alias", name)
 			}
 			a := get()

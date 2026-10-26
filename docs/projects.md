@@ -155,18 +155,22 @@ artifact = "{derived_data}/Build/Products/Debug-iphoneos/Shop.app"
 |---|---|
 | `display` | The name in the output and in the ujibox app |
 | `env` | Environment variables for every step of the app |
-| `setup`, `clean`, `retry` | Steps for both platforms. See below |
+| `setup`, `clean`, `retry` | Steps for every platform. See below |
 | `[apps.<key>.android]` | How to build the Android app |
 | `[apps.<key>.ios]` | How to build the iOS app for simulators |
 | `[apps.<key>.ios.device]` | How to build the iOS app for physical devices. See [Device builds](#device-builds) |
+| `[apps.<key>.desktop]` | How to build the desktop app. See [Desktop and web apps](desktop-web.md) |
+| `[apps.<key>.web]` | How to build the web app. See [Desktop and web apps](desktop-web.md) |
+
+An app needs at least one platform table.
 
 ### Platform keys
 
 | Key | Meaning |
 |---|---|
-| `id` | The application id or bundle id. uji uses it for `launch` and `uninstall` when it has no stored build |
+| `id` | The application id or bundle id. uji uses it for `launch` and `uninstall` when it has no stored build. For a web app or a desktop jar, it is the name that uji shows |
 | `build` | The shell commands that make the artifact. They run in order, from the checkout root |
-| `artifact` | A glob that finds the APK or `.app` after the build. `**` matches any number of directories. If more than one file matches, uji takes the newest |
+| `artifact` | A glob that finds the artifact after the build: the APK, the `.app`, the desktop `.app` or `.jar`, or the web folder with `index.html`. `**` matches any number of directories. If more than one file matches, uji takes the newest |
 | `env` | Environment variables for the build of this platform |
 | `setup`, `clean`, `retry` | Steps for this platform only |
 
@@ -209,7 +213,7 @@ and `env` values. uji also exports each one to the commands as
 | `{branch}` | The branch, or `@<worktree>` on a detached HEAD |
 | `{worktree}` | The name of the checkout directory |
 | `{app}` | The app key |
-| `{platform}` | `android` or `ios` |
+| `{platform}` | `android`, `ios`, `desktop` or `web` |
 
 uji does not quote the values. If a path can contain spaces, put the variable
 in quotes: `"{derived_data}"`.

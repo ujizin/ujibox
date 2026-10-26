@@ -38,17 +38,19 @@ func (b *buildFlags) add(c *cobra.Command) {
 func cmdBuild(get func() *app) *cobra.Command {
 	var bf buildFlags
 	c := &cobra.Command{
-		Use:   "build [android|ios|device...]",
+		Use:   "build [android|ios|desktop|web|device...]",
 		Short: "Build the app and keep it in the store, without installing it",
 		Long: `Build the app of the current checkout and keep the artifact in the store.
 
 With no selector, uji builds every platform the app has. A platform word builds
 only that platform; a device name builds what that device needs. iOS builds
 are for simulators; --ios-device, or the name of a physical iPhone, makes a
-signed build for physical devices.`,
+signed build for physical devices. Desktop and web builds run on this Mac:
+` + "`uji launch desktop`" + ` and ` + "`uji launch web`" + ` start them.`,
 		Example: `  uji build
   uji build android
   uji build ios --clean
+  uji build desktop web
   uji build --ios-device`,
 		GroupID: "build",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -153,6 +155,10 @@ func targetFor(target string) string {
 		return "physical iOS devices"
 	case device.TargetSimulator:
 		return "iOS simulators"
+	case device.TargetDesktop:
+		return "desktop (this Mac)"
+	case device.TargetWeb:
+		return "web (a browser)"
 	}
 	return "Android devices"
 }
@@ -232,7 +238,10 @@ branch. --build picks another stored build: a number from ` + "`uji builds`" + `
 build id, a commit sha, or a branch name.
 
 A named AVD or simulator that is off boots first. With no selector, uji uses
-every running device and never boots one.`,
+every running device and never boots one.
+
+Desktop and web apps are not installed: ` + "`uji launch desktop`" + ` and
+` + "`uji launch web`" + ` start the stored build.`,
 		Example: `  uji install
   uji install android
   uji install ios "iPhone 17 Pro"
@@ -248,6 +257,12 @@ every running device and never boots one.`,
 				}
 				// A build id or sha names one build; it needs no project.
 				return a.installStored(ref, args, bf, noLaunch)
+			}
+			if ref != "" && !last {
+				// A build id or sha can name a desktop or web build.
+				if m, err := a.store.Find(ref, store.Filter{AppID: p.StoreID(ap)}); err == nil && !config.IsDevicePlatform(m.Platform) {
+					return hostBuildError(m)
+				}
 			}
 			sel := device.ParseSelectors(args, bf.android, bf.ios)
 			devs, err := a.mgr.Resolve(a.ctx, sel, ap.Platforms())
@@ -367,7 +382,7 @@ func (a *app) pick(g gitinfo.Info, p *config.Project, ap *config.App, target, re
 func cmdSetup(get func() *app) *cobra.Command {
 	var appKey string
 	c := &cobra.Command{
-		Use:   "setup [android|ios]",
+		Use:   "setup [android|ios|desktop|web]",
 		Short: "Run the project's setup steps without building",
 		Long: `Run the setup steps of the project file, for example the copy of
 local.properties into a new worktree. A step with "creates" is skipped when
@@ -422,11 +437,20 @@ func (a *app) installOn(devs []device.Device, builds map[string]*store.Manifest,
 	})
 }
 
+// hostBuildError says how to start a desktop or web build, which uji does
+// not install.
+func hostBuildError(m *store.Manifest) error {
+	return fmt.Errorf("build %s is a %s build; uji does not install it: run `uji launch %s -b %s` in its project", m.ShortID(), m.Platform, m.Platform, m.ShortID())
+}
+
 // installStored installs one stored build, found by id or sha in every app.
 func (a *app) installStored(ref string, args []string, bf buildFlags, noLaunch bool) error {
 	m, err := a.store.Find(ref, store.Filter{})
 	if err != nil {
 		return err
+	}
+	if !config.IsDevicePlatform(m.Platform) {
+		return hostBuildError(m)
 	}
 	ui.Info(os.Stderr, "%s %s: stored build %s · %s@%s · %s", m.App.Name, m.Platform, m.ShortID(), m.Group(), m.ShortSHA(), ui.Ago(m.CreatedAt))
 	sel := device.ParseSelectors(args, bf.android, bf.ios)

@@ -1,6 +1,6 @@
 ---
 name: uji-config
-description: Write or fix the uji (ujibox) project config of a repository, in .ujibox.toml or ~/.config/ujibox/projects. Use it when `uji build` cannot build the project, when the build needs setup steps, a wrapper script or a retry rule, or when a physical iPhone needs a signed device build.
+description: Write or fix the uji (ujibox) project config of a repository, in .ujibox.toml or ~/.config/ujibox/projects. Use it when `uji build` cannot build the project, when the build needs setup steps, a wrapper script or a retry rule, when a physical iPhone needs a signed device build, or when a desktop or web app needs a build config.
 ---
 
 # Write the uji project config
@@ -30,8 +30,9 @@ uji config project          # writes a file on this machine only
 uji config show             # prints the result, with the variables filled in
 ```
 
-uji detects the Gradle application modules and the Xcode projects. Each value
-has a comment that says where it came from.
+uji detects the Gradle application modules, the Xcode projects, the Compose
+desktop apps and the Kotlin web apps (wasmJs or js). Each value has a comment
+that says where it came from.
 
 ## Format
 
@@ -53,6 +54,19 @@ artifact = "{derived_data}/Build/Products/Debug-iphonesimulator/Shop.app"
 [apps.shop.ios.device]
 build = ['xcodebuild -project ios/Shop.xcodeproj -scheme Shop -configuration Debug -destination "generic/platform=iOS" -derivedDataPath "{derived_data}" -allowProvisioningUpdates build']
 artifact = "{derived_data}/Build/Products/Debug-iphoneos/Shop.app"
+```
+
+Desktop and web apps take the same keys:
+
+```toml
+[apps.shop.desktop]
+build = ["./gradlew :desktopApp:createDistributable"]
+artifact = "desktopApp/build/compose/binaries/main/app/*.app"   # a .app or a .jar
+
+[apps.shop.web]
+id = "shop-web"   # a web build has no id; uji shows this name
+build = ["./gradlew :webApp:wasmJsBrowserDistribution"]
+artifact = "webApp/build/dist/wasmJs/productionExecutable"      # the folder with index.html
 ```
 
 - `build` runs from the checkout root, in order.

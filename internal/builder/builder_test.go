@@ -90,3 +90,40 @@ func TestInspectAppTarget(t *testing.T) {
 		t.Errorf("device inspect = %q %+v %v", id, v, err)
 	}
 }
+
+func TestInspectDesktopApp(t *testing.T) {
+	app := filepath.Join(t.TempDir(), "Shop.app")
+	plist := `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.example.shop.desktop</string>
+<key>CFBundleExecutable</key><string>shop</string>
+<key>CFBundleShortVersionString</key><string>1.0.0</string>
+</dict></plist>`
+	touch(t, filepath.Join(app, "Contents", "MacOS", "shop"), time.Now())
+	if err := os.WriteFile(filepath.Join(app, "Contents", "Info.plist"), []byte(plist), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	id, v, err := Inspect(context.Background(), "desktop", "desktop", app, "")
+	if err != nil || id != "com.example.shop.desktop" || v.Name != "1.0.0" || v.Code != "" {
+		t.Errorf("desktop inspect = %q %+v %v", id, v, err)
+	}
+	os.Remove(filepath.Join(app, "Contents", "MacOS", "shop"))
+	if _, _, err := Inspect(context.Background(), "desktop", "desktop", app, ""); err == nil {
+		t.Error("a .app without its executable must fail")
+	}
+}
+
+func TestInspectWeb(t *testing.T) {
+	dist := filepath.Join(t.TempDir(), "productionExecutable")
+	if err := os.MkdirAll(dist, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Inspect(context.Background(), "web", "web", dist, ""); err == nil || !strings.Contains(err.Error(), "index.html") {
+		t.Errorf("a dist folder without index.html must fail: %v", err)
+	}
+	touch(t, filepath.Join(dist, "index.html"), time.Now())
+	id, v, err := Inspect(context.Background(), "web", "web", dist, "")
+	if err != nil || id != "" || v.Name != "" {
+		t.Errorf("web inspect = %q %+v %v", id, v, err)
+	}
+}

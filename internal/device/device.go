@@ -1,5 +1,6 @@
 // Package device lists, resolves and drives Android devices, Android
-// emulators, iOS simulators and physical iOS devices.
+// emulators, iOS simulators and physical iOS devices. It also starts desktop
+// and web apps on this Mac and captures their windows.
 package device
 
 import (
@@ -24,24 +25,33 @@ const (
 
 // Target is what a build runs on. One Android build (an APK) runs on
 // emulators and phones; iOS needs a simulator build or a signed device build.
+// Desktop and web builds run on this Mac; their target is the platform name.
 const (
 	TargetEmulator  = "emulator"
 	TargetSimulator = "simulator"
 	TargetDevice    = "device"
+	TargetDesktop   = config.Desktop
+	TargetWeb       = config.Web
 )
 
 // TargetPlatform returns the platform of a target.
 func TargetPlatform(target string) string {
-	if target == TargetEmulator {
+	switch target {
+	case TargetEmulator:
 		return config.Android
+	case TargetDesktop, TargetWeb:
+		return target
 	}
 	return config.IOS
 }
 
 // DefaultTarget is the target of a platform when no device says otherwise.
 func DefaultTarget(platform string) string {
-	if platform == config.Android {
+	switch platform {
+	case config.Android:
 		return TargetEmulator
+	case config.Desktop, config.Web:
+		return platform
 	}
 	return TargetSimulator
 }
@@ -51,6 +61,8 @@ const (
 	KindPhysical  = "device"
 	KindEmulator  = "emulator"
 	KindSimulator = "simulator"
+	// KindWindow is a desktop or web app that uji launched on this Mac.
+	KindWindow = "window"
 )
 
 // Device is one target. ID is the adb serial or the simulator UDID. For an AVD
@@ -183,8 +195,17 @@ func (m *Manager) aliasFor(d Device) string {
 	return ""
 }
 
-// AllPlatforms is the list of supported platforms.
+// AllPlatforms is the list of device platforms. Desktop and web apps run on
+// this Mac and are not devices.
 var AllPlatforms = []string{config.Android, config.IOS}
+
+// HostPlatforms is the list of platforms whose apps run on this Mac.
+var HostPlatforms = []string{config.Desktop, config.Web}
+
+// NotDeviceError is the error of a device command that gets desktop or web.
+func NotDeviceError(platform string) error {
+	return fmt.Errorf("%s is not a device platform: this command works with android and ios devices; desktop and web apps support build, launch, screenshot and record", platform)
+}
 
 // Selection is the parsed form of the selector words of a command.
 type Selection struct {
@@ -193,7 +214,8 @@ type Selection struct {
 }
 
 // ParseSelectors splits words into platform words and device names. The
-// flags --android and --ios add platform words.
+// flags --android and --ios add platform words. "desktop" and "web" are
+// platform words too; "all" means every device platform.
 func ParseSelectors(words []string, android, ios bool) Selection {
 	s := Selection{}
 	add := func(p string) {
@@ -216,6 +238,10 @@ func ParseSelectors(words []string, android, ios bool) Selection {
 			add(config.Android)
 		case "ios":
 			add(config.IOS)
+		case "desktop":
+			add(config.Desktop)
+		case "web":
+			add(config.Web)
 		case "all":
 			add(config.Android)
 			add(config.IOS)
@@ -234,6 +260,31 @@ func (s Selection) PlatformsOr(def []string) []string {
 	return s.Platforms
 }
 
+// Split returns the selection without the desktop and web words, and those
+// words.
+func (s Selection) Split() (devices Selection, host []string) {
+	devices.Names = s.Names
+	for _, p := range s.Platforms {
+		if config.IsDevicePlatform(p) {
+			devices.Platforms = append(devices.Platforms, p)
+		} else {
+			host = append(host, p)
+		}
+	}
+	return devices, host
+}
+
+// devicePlatforms keeps the device platforms of a list.
+func devicePlatforms(platforms []string) []string {
+	var out []string
+	for _, p := range platforms {
+		if config.IsDevicePlatform(p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // Resolve turns a selection into devices.
 //   - With no names, it returns every ready device of the selected platforms
 //     (see Device.Default). It never boots anything in that case.
@@ -241,8 +292,16 @@ func (s Selection) PlatformsOr(def []string) []string {
 //     name or AVD name (with @<os> for a simulator), then a unique prefix.
 //   - A name that matches several devices is an error that lists them, unless
 //     exactly one of them is ready.
+//   - A desktop or web word is an error: those apps are not on a device. The
+//     desktop and web platforms of defPlatforms are left out.
 func (m *Manager) Resolve(ctx context.Context, sel Selection, defPlatforms []string) ([]Device, error) {
-	platforms := sel.PlatformsOr(defPlatforms)
+	if _, host := sel.Split(); len(host) > 0 {
+		return nil, NotDeviceError(host[0])
+	}
+	platforms := sel.PlatformsOr(devicePlatforms(defPlatforms))
+	if len(platforms) == 0 {
+		return nil, NotDeviceError(strings.Join(defPlatforms, " and "))
+	}
 	devs, errs := m.List(ctx, platforms)
 	if len(sel.Names) == 0 {
 		var out []Device
