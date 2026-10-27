@@ -30,12 +30,14 @@ import io.ujibox.app.resources.Res
 import io.ujibox.app.resources.action_back
 import io.ujibox.app.resources.app_gone
 import io.ujibox.app.resources.ic_back
+import io.ujibox.app.resources.search_no_results
 import io.ujibox.app.ui.Badges
 import io.ujibox.app.ui.CenteredMessage
 import io.ujibox.app.ui.InstallIconButton
 import io.ujibox.app.ui.InstallMessageEffect
 import io.ujibox.app.ui.IosWarning
 import io.ujibox.app.ui.Loading
+import io.ujibox.app.ui.SearchField
 import io.ujibox.app.ui.SyncProblem
 import io.ujibox.app.ui.WatchIndex
 import io.ujibox.app.ui.ago
@@ -66,9 +68,18 @@ fun BranchesScreen(model: BranchesModel, onBack: () -> Unit, onOpenBuild: (Strin
         Column(Modifier.fillMaxSize().padding(padding)) {
             SyncProblem(model.state, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             val app = model.app
+            if (model.hasBuilds) {
+                SearchField(
+                    query = model.query,
+                    onQueryChange = { model.eventSink(BranchesEvent.Search(it)) },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
             when {
                 !model.loaded -> Loading()
                 app == null -> CenteredMessage(stringResource(Res.string.app_gone))
+                model.hasBuilds && app.branches.isEmpty() ->
+                    CenteredMessage(stringResource(Res.string.search_no_results, model.query.trim()))
                 else -> BuildList(app, model, onOpenBuild)
             }
         }

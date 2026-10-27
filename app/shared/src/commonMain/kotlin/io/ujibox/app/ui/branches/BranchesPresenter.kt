@@ -3,7 +3,10 @@ package io.ujibox.app.ui.branches
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
@@ -11,6 +14,7 @@ import io.ujibox.app.data.AppDetail
 import io.ujibox.app.data.BuildItem
 import io.ujibox.app.data.BuildRepository
 import io.ujibox.app.data.SyncState
+import io.ujibox.app.data.matching
 import io.ujibox.app.install.InstallMessage
 import io.ujibox.app.install.Installer
 import io.ujibox.app.install.rememberInstallRunner
@@ -21,6 +25,9 @@ import kotlinx.coroutines.launch
 data class BranchesModel(
     /** Null if the app is not in the index. */
     val app: AppDetail?,
+    /** False when the app has no build, whatever the query. */
+    val hasBuilds: Boolean,
+    val query: String,
     /** False until the first read of the database. */
     val loaded: Boolean,
     val state: SyncState,
@@ -37,6 +44,8 @@ sealed interface BranchesEvent {
     data class Install(val build: BuildItem) : BranchesEvent
 
     data object DismissMessage : BranchesEvent
+
+    data class Search(val query: String) : BranchesEvent
 }
 
 /** The builds of one app, grouped by branch. */
@@ -51,9 +60,13 @@ class BranchesPresenter(
         val app by collectLoaded(appId) { repository.app(appId) }
         val state by repository.state.collectAsState()
         val runner = rememberInstallRunner(installer, repository)
+        var query by remember { mutableStateOf("") }
         val scope = rememberCoroutineScope()
+        val detail = app?.value
         return BranchesModel(
-            app = app?.value,
+            app = detail?.matching(query),
+            hasBuilds = detail?.branches?.any { it.builds.isNotEmpty() } == true,
+            query = query,
             loaded = app != null,
             state = state,
             installing = runner.installing,
@@ -64,6 +77,7 @@ class BranchesPresenter(
                 BranchesEvent.CheckIndex -> scope.launch { repository.refreshIfChanged() }
                 is BranchesEvent.Install -> runner.install(event.build)
                 BranchesEvent.DismissMessage -> runner.dismiss()
+                is BranchesEvent.Search -> query = event.query
             }
         }
     }

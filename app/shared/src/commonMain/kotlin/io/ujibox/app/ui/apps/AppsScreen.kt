@@ -29,10 +29,12 @@ import io.ujibox.app.resources.builds
 import io.ujibox.app.resources.empty_body
 import io.ujibox.app.resources.empty_title
 import io.ujibox.app.resources.ic_refresh
+import io.ujibox.app.resources.search_no_results
 import io.ujibox.app.resources.sync_folder
 import io.ujibox.app.resources.synced_from
 import io.ujibox.app.ui.CenteredMessage
 import io.ujibox.app.ui.Loading
+import io.ujibox.app.ui.SearchField
 import io.ujibox.app.ui.SyncProblem
 import io.ujibox.app.ui.WatchIndex
 import io.ujibox.app.ui.ago
@@ -59,13 +61,21 @@ fun AppsScreen(model: AppsModel, onOpenApp: (String) -> Unit) {
         Column(Modifier.fillMaxSize().padding(padding)) {
             SyncProblem(model.state, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             val apps = model.apps
+            if (model.hasApps) {
+                SearchField(
+                    query = model.query,
+                    onQueryChange = { model.eventSink(AppsEvent.Search(it)) },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
             when {
-                apps == null || (apps.isEmpty() && model.state == SyncState.Loading) -> Loading()
-                apps.isEmpty() -> CenteredMessage(
+                apps == null || (!model.hasApps && model.state == SyncState.Loading) -> Loading()
+                !model.hasApps -> CenteredMessage(
                     title = stringResource(Res.string.empty_title),
                     body = stringResource(Res.string.empty_body),
                     detail = stringResource(Res.string.sync_folder, model.folder),
                 )
+                apps.isEmpty() -> CenteredMessage(stringResource(Res.string.search_no_results, model.query.trim()))
                 else -> AppList(model, apps, onOpenApp)
             }
         }
